@@ -1,0 +1,6 @@
+{
+  "port": 8788,
+  "bind_host": "0.0.0.0",
+  "auto_open_browser": true,
+  "note": "修改 port 可自定义服务端口（例如 8080、3000），保存后重启软件生效"
+}

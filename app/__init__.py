@@ -1,0 +1,2 @@
+"""AI stock platform backend."""
+

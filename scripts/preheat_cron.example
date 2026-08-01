@@ -1,0 +1,2 @@
+# 工作日关键时间点只做只读预热，不会触发交易
+0 8,9,13,14 * * 1-5 cd /opt/laoma && /usr/bin/python3 scripts/preheat_once.py --reason=cron >> /var/log/laoma-preheat.log 2>&1

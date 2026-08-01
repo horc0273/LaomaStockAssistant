@@ -1,0 +1,13 @@
+LAOMA STOCK ASSISTANT - INTERNAL RESEARCH LICENSE
+
+Version 1.0.0
+
+1. This software is provided for internal research, market monitoring, strategy validation, and educational use only.
+2. Market data may be delayed, incomplete, unavailable, or subject to third-party licensing restrictions.
+3. AI analysis, model scores, BUY/HOLD/REDUCE/SELL labels, and recommended actions are research outputs only. They are not investment advice or a guarantee of returns.
+4. Users are responsible for verifying data accuracy and making their own investment decisions.
+5. The software does not execute real-money trades automatically. Any real trade must be confirmed and completed by the user through an authorized broker.
+6. Local watchlists, positions, accounts, and API tokens are stored on the user's own computer. Users must protect their own credentials and data.
+7. Redistribution, commercial sale, or public release requires authorization from the software owner.
+
+By installing or using this software, you accept these terms and assume all investment risks.
