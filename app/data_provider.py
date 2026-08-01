@@ -22,6 +22,9 @@ from .tushare_service import TushareService
 from .trading_gate import calculate_unified_gate
 from .wencai_service import WencaiService
 from .eastmoney_ai_service import EastMoneyAIService
+from .signal_engine import SignalEngine
+from .holding_diagnosis import HoldingDiagnosisEngine
+from .eastmoney_ai_service import EastMoneyAIService
 
 
 
@@ -171,6 +174,8 @@ class DemoDataProvider:
         self.load_position_store()
         self.wencai = WencaiService()
         self.eastmoney_ai = EastMoneyAIService()
+        self.signal_engine = SignalEngine(self.data_dir)
+        self.holding_diagnosis = HoldingDiagnosisEngine()
 
     @staticmethod
     def to_eastmoney_secid(code: str) -> str:

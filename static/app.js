@@ -3609,7 +3609,16 @@ document.querySelectorAll('.nav').forEach(button => {
     button.classList.add('active');
     $(`#${button.dataset.view}`).classList.add('active');
     $('#pageTitle').textContent = button.textContent;
-    const mobileView = ['dashboard', 'watchlist', 'trading', 'screener', 'admin'].includes(button.dataset.view) ? button.dataset.view : 'screener';
+    const mobileView = ['opportunities', 'holdings', 'signals', 'review', 'admin'].includes(button.dataset.view) ? button.dataset.view : 'opportunities';
+    syncMobileNavigation(mobileView);
+    if (button.dataset.view === 'opportunities') loadOpportunities();
+    if (button.dataset.view === 'holdings') loadHoldingsDiagnosis();
+    if (button.dataset.view === 'signals') loadSignals();
+    if (button.dataset.view === 'review') { loadDailyReview(); loadReviewStats(); }
+    if (button.dataset.view === 'abnormal') initAbnormalMonitor();
+    if (button.dataset.view === 'screener') initSmartScreener();
+    if (button.dataset.view === 'ai-tools') initAITools();
+    if (button.dataset.view === 'admin') loadAdminMembers();
     syncMobileNavigation(mobileView);
     if (button.dataset.view === 'abnormal') initAbnormalMonitor();
     if (button.dataset.view === 'screener') initSmartScreener();
@@ -3946,7 +3955,7 @@ setInterval(() => {
 }, 10000);
 setClock();
 applyReviewTheme(state.reviewTheme);
-syncMobileNavigation('dashboard');
+syncMobileNavigation('opportunities');
 initAuth();
 
 
@@ -4194,3 +4203,300 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+
+
+/* ========== v2.0 决策辅助：信号 / 持仓诊断 / 复盘 ========== */
+
+async function loadSignals() {
+  const body = $('#signalsBody');
+  if (!body) return;
+  body.innerHTML = '<div class="empty">正在生成交易信号...</div>';
+  try {
+    const data = await apiJson('/api/signals/list');
+    renderSignals(data.items || [], body);
+  } catch (error) {
+    body.innerHTML = `<div class="empty">信号加载失败：${escapeHtml(error.message || '未知错误')}</div>`;
+  }
+}
+
+function renderSignals(signals, container) {
+  if (!signals.length) {
+    container.innerHTML = '<div class="empty">暂无待处理信号。</div>';
+    return;
+  }
+  const priorityColor = { high: 'red', medium: 'amber', low: 'green' };
+  const typeLabel = { buy: '买入', sell: '卖出', ttrade: '做T', stop_loss: '止损', take_profit: '止盈', alert: '预警' };
+  let html = '<div class="signal-cards">';
+  signals.forEach(sig => {
+    const color = priorityColor[sig.priority] || 'gray';
+    const tlabel = typeLabel[sig.type] || sig.type;
+    html += `<div class="signal-card ${color}" data-signal-id="${escapeHtml(sig.id)}">
+      <div class="signal-header">
+        <span class="signal-type">${escapeHtml(tlabel)}</span>
+        <span class="signal-priority tag ${color}">${escapeHtml(sig.priority)}</span>
+        <span class="signal-confidence">置信度 ${sig.confidence}%</span>
+      </div>
+      <div class="signal-body">
+        <h4>${escapeHtml(sig.name)} (${escapeHtml(sig.code)})</h4>
+        <p>${escapeHtml(sig.trigger_reason)}</p>
+        <div class="signal-meta">
+          <span>建议价 ¥${sig.suggested_price}</span>
+          ${sig.stop_loss ? `<span>止损 ¥${sig.stop_loss}</span>` : ''}
+          ${sig.target ? `<span>目标 ¥${sig.target}</span>` : ''}
+          ${sig.win_rate ? `<span>胜率 ${(sig.win_rate * 100).toFixed(0)}%</span>` : ''}
+        </div>
+      </div>
+      <div class="signal-actions">
+        <button class="primary" data-sig-execute="${escapeHtml(sig.id)}">执行</button>
+        <button data-sig-dismiss="${escapeHtml(sig.id)}">忽略</button>
+        <button data-sig-snooze="${escapeHtml(sig.id)}">延后</button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+
+  // 绑定按钮事件
+  container.querySelectorAll('[data-sig-execute]').forEach(btn => {
+    btn.addEventListener('click', () => executeSignal(btn.dataset.sigExecute));
+  });
+  container.querySelectorAll('[data-sig-dismiss]').forEach(btn => {
+    btn.addEventListener('click', () => dismissSignal(btn.dataset.sigDismiss));
+  });
+  container.querySelectorAll('[data-sig-snooze]').forEach(btn => {
+    btn.addEventListener('click', () => snoozeSignal(btn.dataset.sigSnooze));
+  });
+}
+
+async function executeSignal(signalId) {
+  const price = prompt('请输入执行价格（留空使用建议价）：');
+  if (price === null) return;
+  const executedPrice = parseFloat(price) || 0;
+  try {
+    await apiJson('/api/signals/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signal_id: signalId, executed_price: executedPrice }),
+    });
+    pushEvent('信号已执行');
+    loadSignals();
+  } catch (error) {
+    pushEvent(`信号执行失败：${error.message || error}`, 'warn');
+  }
+}
+
+async function dismissSignal(signalId) {
+  const reason = prompt('忽略原因（可选）：') || '';
+  try {
+    await apiJson('/api/signals/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signal_id: signalId, reason }),
+    });
+    pushEvent('信号已忽略');
+    loadSignals();
+  } catch (error) {
+    pushEvent(`信号忽略失败：${error.message || error}`, 'warn');
+  }
+}
+
+async function snoozeSignal(signalId) {
+  try {
+    await apiJson('/api/signals/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signal_id: signalId, reason: '延后处理' }),
+    });
+    pushEvent('信号已延后');
+    loadSignals();
+  } catch (error) {
+    pushEvent(`信号延后失败：${error.message || error}`, 'warn');
+  }
+}
+
+async function loadHoldingsDiagnosis() {
+  const body = $('#holdingsBody');
+  if (!body) return;
+  body.innerHTML = '<div class="empty">正在诊断持仓...</div>';
+  try {
+    const data = await apiJson('/api/holdings/diagnose');
+    renderHoldingsDiagnosis(data.items || [], body);
+  } catch (error) {
+    body.innerHTML = `<div class="empty">持仓诊断失败：${escapeHtml(error.message || '未知错误')}</div>`;
+  }
+}
+
+function renderHoldingsDiagnosis(diagnoses, container) {
+  if (!diagnoses.length) {
+    container.innerHTML = '<div class="empty">暂无持仓。</div>';
+    return;
+  }
+  const trendColor = { strong: 'green', moderate: 'blue', weak: 'red', neutral: 'gray' };
+  const riskColor = { low: 'green', medium: 'amber', high: 'red' };
+  let html = '<div class="diagnosis-cards">';
+  diagnoses.forEach(d => {
+    const tcolor = trendColor[d.trend] || 'gray';
+    const rcolor = riskColor[d.risk_level] || 'gray';
+    const healthClass = d.health_score >= 70 ? 'good' : d.health_score >= 40 ? 'warning' : 'danger';
+    html += `<div class="diagnosis-card ${healthClass}">
+      <div class="diagnosis-header">
+        <h4>${escapeHtml(d.name)} (${escapeHtml(d.code)})</h4>
+        <div class="diagnosis-badges">
+          <span class="tag ${tcolor}">趋势: ${escapeHtml(d.trend)}</span>
+          <span class="tag ${rcolor}">风险: ${escapeHtml(d.risk_level)}</span>
+          <span class="health-score ${healthClass}">${d.health_score}分</span>
+        </div>
+      </div>
+      <div class="diagnosis-body">
+        <p><b>诊断：</b>${escapeHtml(d.diagnosis)}</p>
+        <p><b>建议：</b>${escapeHtml(d.suggestion)}</p>
+        ${d.pnl_pct ? `<p class="pnl ${d.pnl_pct >= 0 ? 'up' : 'down'}">浮盈亏: ${fmtPct(d.pnl_pct)}</p>` : ''}
+      </div>
+      ${d.attribution ? `<div class="attribution-panel">
+        <b>波动归因</b>
+        <div class="attribution-grid">
+          <div>技术面: ${fmtPct(d.attribution.technical?.contribution || 0)}</div>
+          <div>板块: ${fmtPct(d.attribution.sector?.contribution || 0)}</div>
+          <div>资金: ${fmtPct(d.attribution.fund_flow?.contribution || 0)}</div>
+          <div>消息: ${fmtPct(d.attribution.news?.contribution || 0)}</div>
+        </div>
+      </div>` : ''}
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+async function loadReviewStats() {
+  const container = $('#reviewStatsPanel');
+  if (!container) return;
+  try {
+    const data = await apiJson('/api/review/stats?days=7');
+    renderReviewStats(data.stats || {}, container);
+  } catch (error) {
+    container.innerHTML = `<div class="empty">统计加载失败：${escapeHtml(error.message || '未知错误')}</div>`;
+  }
+}
+
+function renderReviewStats(stats, container) {
+  const hitRate = stats.hit_rate || 0;
+  const hitColor = hitRate >= 0.5 ? 'green' : hitRate >= 0.3 ? 'amber' : 'red';
+  container.innerHTML = `
+    <div class="review-stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">${stats.total_signals || 0}</div>
+        <div class="stat-label">7日信号总数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value ${hitColor}">${(hitRate * 100).toFixed(0)}%</div>
+        <div class="stat-label">命中率</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.executed || 0}</div>
+        <div class="stat-label">已执行</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.profit?.toFixed(2) || '0.00'}</div>
+        <div class="stat-label">累计盈亏</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.pending || 0}</div>
+        <div class="stat-label">待处理</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.ignored || 0}</div>
+        <div class="stat-label">已忽略</div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadOpportunities() {
+  const body = $('#opportunitiesBody');
+  if (!body) return;
+  body.innerHTML = '<div class="empty">正在扫描市场机会...</div>';
+  try {
+    // 并行加载问财推荐、AI推荐和候选评分
+    const [reco, candidates] = await Promise.all([
+      safeApiJson('/api/recommendations/ai?limit=6'),
+      safeApiJson('/api/research/candidates'),
+    ]);
+    const items = (reco.items || []).concat((candidates || []).slice(0, 6));
+    renderOpportunities(items, body);
+  } catch (error) {
+    body.innerHTML = `<div class="empty">机会扫描失败：${escapeHtml(error.message || '未知错误')}</div>`;
+  }
+}
+
+function renderOpportunities(items, container) {
+  if (!items.length) {
+    container.innerHTML = '<div class="empty">暂无推荐机会。</div>';
+    return;
+  }
+  let html = '<div class="opportunity-cards">';
+  items.forEach(item => {
+    const code = item.code || '';
+    const name = item.name || item.stock_name || '';
+    const score = item.score || item.total_score || 0;
+    const action = item.action || item.signal_label || '观察';
+    const reason = item.reason || item.trigger_reason || '';
+    const changePct = item.change_pct || 0;
+    const price = item.price || 0;
+    html += `<div class="opportunity-card">
+      <div class="opp-header">
+        <h4>${escapeHtml(name)} (${escapeHtml(code)})</h4>
+        <span class="tag ${changePct >= 0 ? 'green' : 'red'}">${fmtPct(changePct / 100)}</span>
+      </div>
+      <div class="opp-body">
+        <p><b>评分:</b> ${score} · <b>动作:</b> ${escapeHtml(action)}</p>
+        <p>${escapeHtml(reason)}</p>
+        ${price ? `<p>当前价 ¥${price}</p>` : ''}
+      </div>
+      <div class="opp-actions">
+        <button class="primary" data-track-reco="${escapeHtml(code)}">+ 关注</button>
+        <button data-ai="${escapeHtml(code)}" data-name="${escapeHtml(name)}">AI 分析</button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// 在 review section 中插入信号统计面板
+function injectReviewStatsPanel() {
+  const reviewSection = $('#review');
+  if (!reviewSection || reviewSection.querySelector('#reviewStatsPanel')) return;
+  const panel = document.createElement('div');
+  panel.id = 'reviewStatsPanel';
+  panel.className = 'panel';
+  panel.innerHTML = '<div class="section-head"><h2>信号胜率统计</h2></div><div class="empty">正在加载统计...</div>';
+  const firstPanel = reviewSection.querySelector('.panel');
+  if (firstPanel) {
+    reviewSection.insertBefore(panel, firstPanel);
+  }
+}
+
+// 绑定事件
+$('#signalsBody')?.addEventListener('click', event => {
+  const executeBtn = event.target.closest('[data-sig-execute]');
+  if (executeBtn) return executeSignal(executeBtn.dataset.sigExecute);
+  const dismissBtn = event.target.closest('[data-sig-dismiss]');
+  if (dismissBtn) return dismissSignal(dismissBtn.dataset.sigDismiss);
+  const snoozeBtn = event.target.closest('[data-sig-snooze]');
+  if (snoozeBtn) return snoozeSignal(snoozeBtn.dataset.sigSnooze);
+});
+
+$('#opportunitiesBody')?.addEventListener('click', event => {
+  const trackBtn = event.target.closest('[data-track-reco]');
+  if (trackBtn) return trackRecommendation(trackBtn.dataset.trackReco);
+  const aiBtn = event.target.closest('[data-ai]');
+  if (aiBtn) return analyzeStock(aiBtn.dataset.ai, aiBtn.dataset.name);
+});
+
+$('#holdingsBody')?.addEventListener('click', event => {
+  const aiBtn = event.target.closest('[data-ai]');
+  if (aiBtn) return analyzeStock(aiBtn.dataset.ai, aiBtn.dataset.name);
+});
+
+// 初始化时注入 review 统计面板
+injectReviewStatsPanel();

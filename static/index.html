@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>老马智能股票盯盘助手</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260716-feedback-batch1-v1">
+  <link rel="stylesheet" href="/static/styles.css?v=20260801-v2.0-decision">
   <style>
     .hidden { display: none !important; }
     .login-gate { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: linear-gradient(135deg, #f7fbff 0%, #edf4ff 45%, #f8fafc 100%); padding: 20px; }
@@ -56,6 +56,19 @@
     </form>
   </div>
   <aside>
+    <div class="brand">老马智能股票盯盘助手<span>v2.0 决策辅助</span></div>
+    <button class="nav active" data-view="opportunities">机会发现</button>
+    <button class="nav" data-view="holdings">持仓诊断</button>
+    <button class="nav" data-view="signals">交易信号</button>
+    <button class="nav" data-view="review">复盘归因</button>
+    <button class="nav admin-only" data-view="admin">会员管理</button>
+    <div class="side-card">
+      <b>v2.0 决策模式</b>
+      <span>实时行情：已接入</span>
+      <button id="aiGatewayButton" class="gateway-status" type="button">AI网关：读取中...</button>
+      <span>信号引擎：已启用</span>
+    </div>
+  </aside>
     <div class="brand">老马智能股票盯盘助手<span>内部量化工作台</span></div>
     <button class="nav active" data-view="dashboard">今日工作台</button>
     <button class="nav" data-view="review">复盘中心</button>
@@ -555,6 +568,49 @@
       </div>
     </section>
 
+
+    <!-- v2.0 机会发现 -->
+    <section id="opportunities" class="view active">
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">问财 × 东财 × 智能选股</span>
+            <h2>机会发现</h2>
+            <p>在大量数据中找到核心决策点——推荐选股的成功率。</p>
+          </div>
+        </div>
+        <div id="opportunitiesBody" class="cards"><div class="empty">正在扫描市场机会...</div></div>
+      </div>
+    </section>
+
+    <!-- v2.0 持仓诊断 -->
+    <section id="holdings" class="view">
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">持仓体检 + 波动归因</span>
+            <h2>持仓诊断</h2>
+            <p>对每只持仓进行"体检"：评分 + 诊断 + 建议 + 波动归因。</p>
+          </div>
+        </div>
+        <div id="holdingsBody"><div class="empty">正在诊断持仓...</div></div>
+      </div>
+    </section>
+
+    <!-- v2.0 交易信号 -->
+    <section id="signals" class="view">
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">信号卡片 · 执行 · 忽略 · 延后</span>
+            <h2>交易信号</h2>
+            <p>从行情数据中识别交易机会，生成带置信度的可执行信号。</p>
+          </div>
+        </div>
+        <div id="signalsBody"><div class="empty">正在生成信号...</div></div>
+      </div>
+    </section>
+
     <section id="admin" class="view">
       <div class="panel admin-member-panel">
         <div class="section-head">
@@ -582,6 +638,12 @@
   </main>
 
   <nav id="mobileBottomTabs" class="mobile-bottom-tabs" aria-label="移动端主导航">
+    <button type="button" data-mobile-view="opportunities" class="active">机会</button>
+    <button type="button" data-mobile-view="holdings">持仓</button>
+    <button type="button" data-mobile-view="signals">信号</button>
+    <button type="button" data-mobile-view="review">复盘</button>
+    <button type="button" data-mobile-view="admin" class="admin-only">管理</button>
+  </nav>"mobileBottomTabs" class="mobile-bottom-tabs" aria-label="移动端主导航">
     <button type="button" data-mobile-view="dashboard" class="active">首页</button>
     <button type="button" data-mobile-view="watchlist">自选</button>
     <button type="button" data-mobile-view="trading">动作</button>
@@ -788,6 +850,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260716-feedback-batch1-v1"></script>
+  <script src="/static/app.js?v=20260801-v2.0-decision"></script>
 </body>
 </html>

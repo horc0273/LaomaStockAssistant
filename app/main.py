@@ -31,6 +31,8 @@ from .recommendation_scoring_service import RecommendationScoringService
 from .screener_service import ScreenerService, StrategyValidationError
 from .wencai_service import WencaiService
 from .eastmoney_ai_service import EastMoneyAIService
+from .signal_engine import SignalEngine
+from .holding_diagnosis import HoldingDiagnosisEngine
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 STATIC_DIR = ROOT / "static"
@@ -51,6 +53,9 @@ market_data_gateway = MarketDataGateway([
     ("eastmoney-ranked-fallback", provider.ranked_market_universe_fallback),
 ])
 preheat_service = DataPreheatService(provider, market_data_gateway)
+signal_engine = SignalEngine(provider.data_dir)
+holding_diagnosis_engine = HoldingDiagnosisEngine()
+
 
 
 def user_ai_config_path(user: dict) -> Path:
@@ -219,6 +224,22 @@ class WencaiScreenPayload(BaseModel):
 
 
 class EastMoneyAIQueryPayload(BaseModel):
+    code: str = ""
+    name: str = ""
+    question: str = ""
+    query_type: str = "hotspot"
+    title: str = ""
+    summary: str = ""
+
+
+class SignalExecutePayload(BaseModel):
+    signal_id: str
+    executed_price: float = 0.0
+
+
+class SignalDismissPayload(BaseModel):
+    signal_id: str
+    reason: str = ""
     code: str = ""
     name: str = ""
     question: str = ""
@@ -1632,3 +1653,98 @@ def eastmoney_ai_chat(payload: EastMoneyAIQueryPayload, request: Request):
     if payload.name:
         context["name"] = payload.name
     return provider.eastmoney_ai.chat(payload.question, context)
+
+
+# ---------- v2.0 决策辅助：信号 / 持仓诊断 / 复盘 ----------
+
+
+def _holding_to_dict(item) -> dict:
+    """将 build_watchlist_item 结果转为 holding dict。"""
+    stock = item.stock
+    price = float(getattr(stock, "price", 0) or 0)
+    cost = float(getattr(stock, "cost", 0) or 0)
+    d = {
+        "code": getattr(stock, "code", ""),
+        "name": getattr(stock, "name", ""),
+        "price": price,
+        "cost": cost,
+        "change_pct": float(getattr(stock, "change_pct", 0) or 0),
+        "pnl_amount": float(getattr(item, "pnl_amount", 0) or 0),
+        "pnl_pct": float(getattr(item, "pnl_pct", 0) or 0),
+        "quantity": int(getattr(item, "quantity", 0) or 0),
+        "volume": float(getattr(stock, "volume", 0) or 0),
+        "turnover": float(getattr(stock, "turnover", 0) or 0),
+        "amount": float(getattr(stock, "amount", 0) or 0),
+        "high": float(getattr(stock, "high", 0) or price * 1.02),
+        "low": float(getattr(stock, "low", 0) or price * 0.98),
+        "open": float(getattr(stock, "open", 0) or price),
+        "prev_close": float(getattr(stock, "prev_close", 0) or price),
+        "ma20": float(getattr(stock, "ma20", 0) or price),
+        "ma60": float(getattr(stock, "ma60", 0) or price),
+        "avg_volume": float(getattr(stock, "volume", 0) or 0),
+    }
+    return d
+
+
+def _market_data_for_signals() -> dict:
+    """构造 signal_engine 需要的市场数据结构。"""
+    snapshot = market_data_gateway.full_market_snapshot()
+    return {"stocks": snapshot.get("items", []), "source": snapshot.get("source", ""), "fetched_at": snapshot.get("fetched_at", "")}
+
+
+@app.get("/api/signals/list")
+def signals_list(request: Request):
+    user = current_user(request)
+    market = _market_data_for_signals()
+    watch_items = [build_watchlist_item(stock, provider.market_overview()) for stock in provider.get_user_watchlist(user)]
+    holdings = [_holding_to_dict(item) for item in watch_items if item.quantity > 0]
+    # 惰性生成信号
+    signal_engine.generate_signals(market, holdings)
+    active = signal_engine.get_active_signals()
+    return {
+        "items": [s.to_dict() for s in active],
+        "count": len(active),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@app.post("/api/signals/execute")
+def signals_execute(payload: SignalExecutePayload, request: Request):
+    current_user(request)
+    sig = signal_engine.execute_signal(payload.signal_id, payload.executed_price)
+    if not sig:
+        return JSONResponse({"error": "signal_not_found", "message": "信号不存在或已处理"}, status_code=404)
+    return {"ok": True, "signal": sig.to_dict()}
+
+
+@app.post("/api/signals/dismiss")
+def signals_dismiss(payload: SignalDismissPayload, request: Request):
+    current_user(request)
+    sig = signal_engine.dismiss_signal(payload.signal_id, payload.reason)
+    if not sig:
+        return JSONResponse({"error": "signal_not_found", "message": "信号不存在或已处理"}, status_code=404)
+    return {"ok": True, "signal": sig.to_dict()}
+
+
+@app.get("/api/holdings/diagnose")
+def holdings_diagnose(request: Request):
+    user = current_user(request)
+    market = provider.market_overview()
+    watch_items = [build_watchlist_item(stock, market) for stock in provider.get_user_watchlist(user)]
+    holdings = [_holding_to_dict(item) for item in watch_items if item.quantity > 0]
+    if not holdings:
+        return {"items": [], "count": 0, "diagnosed_at": datetime.now().isoformat(timespec="seconds")}
+    market_context = {"sector_change": 0}  # 可扩展
+    diagnoses = holding_diagnosis_engine.diagnose_all(holdings, market_context)
+    return {
+        "items": [d.to_dict() for d in diagnoses],
+        "count": len(diagnoses),
+        "diagnosed_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@app.get("/api/review/stats")
+def review_stats(request: Request, days: int = 7):
+    current_user(request)
+    stats = signal_engine.get_stats(days=max(1, min(days, 90)))
+    return {"ok": True, "stats": stats}
