@@ -1,0 +1,52 @@
+{
+  "_comment": "持仓配置模板，不含任何真实数据。复制为 holdings.json 后填入你的真实持仓。",
+  "_usage": "文件名必须是 holdings.json，与 example 同目录；改完重启容器生效。",
+  "_note": "pnl_amount / pnl_pct 请保持 null，系统会按实时价自动计算。",
+  "holdings": [
+    {
+      "market": "A股",
+      "name": "贵州茅台",
+      "code": "600519.SH",
+      "price": 1500.0,
+      "change_pct": 0.5,
+      "cost": 1400.0,
+      "quantity": 100,
+      "pnl_amount": null,
+      "pnl_pct": null,
+      "tag": "示例-白酒",
+      "ai": "示例数据，请替换为你的真实持仓",
+      "keys": "示例 shili 600519 maotai",
+      "source": "example"
+    },
+    {
+      "market": "A股",
+      "name": "宁德时代",
+      "code": "300750.SZ",
+      "price": 200.0,
+      "change_pct": -1.2,
+      "cost": 220.0,
+      "quantity": 200,
+      "pnl_amount": null,
+      "pnl_pct": null,
+      "tag": "示例-新能源",
+      "ai": "示例数据，请替换为你的真实持仓",
+      "keys": "示例 shili 300750 ningde",
+      "source": "example"
+    },
+    {
+      "market": "A股",
+      "name": "中国平安",
+      "code": "601318.SH",
+      "price": 50.0,
+      "change_pct": 0.3,
+      "cost": 45.0,
+      "quantity": 500,
+      "pnl_amount": null,
+      "pnl_pct": null,
+      "tag": "示例-保险",
+      "ai": "示例数据，请替换为你的真实持仓",
+      "keys": "示例 shili 601318 pingan",
+      "source": "example"
+    }
+  ]
+}

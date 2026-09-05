@@ -1,133 +1,79 @@
-# 老马股票助手（LaomaStockAssistant）
+# 内部 AI 股票盯盘助手 MVP
 
-> 🎯 **内部量化工作台** — 面向 A 股投资者的智能盯盘、选股、复盘一体化工具
->
-> ⚠️ **风险提示**：本工具仅供研究学习，不构成任何投资建议。股市有风险，入市需谨慎。
+这是从原型升级出来的第一版可运行工程。
 
----
+## 当前能力
 
-## ✨ 功能概览
+- FastAPI 后端。
+- 前端工作台页面。
+- 自选股搜索、添加、删除。
+- 市场行情概览。
+- 研究中心候选评分。
+- 2060战法、背离、均线、量价、资金模型的结构化评分。
+- WebSocket 实时行情更新。
+- 每只自选股 AI 分析。
+- 未配置 AI API 时使用本地规则引擎。
+- 配置 AI API 后使用 OpenAI/DeepSeek 兼容接口生成完整报告和动作建议。
 
-| 模块 | 说明 |
-|------|------|
-| 📊 **今日工作台** | 大盘情绪、账户概览、AI 盘中判断、实时事件流 |
-| 🔍 **智能选股** | 形态选股（放量突破/跳空/反包）、自然语言指标选股、推荐验证 |
-| 🤖 **AI 工具** | 同花顺问财自然语言选股、东方财富妙想 AI（热点/个股分析/问答） |
-| 📈 **市场行情** | 全球股指、板块强弱、资金流、龙虎榜、市场宽度热力图 |
-| ⚡ **异动监控** | 火箭发射、打开涨停、封跌停、大笔买卖等实时异动 |
-| 📝 **复盘中心** | 每日市场情绪、自选股重点、观察池候选、历史复盘记录 |
-| 🎯 **交易动作** | 市场闸门、突破复核、EA 模拟盘、交易日志 |
-| 🔬 **研究中心** | 产业链拆解、系统审计、量化升级路线、多智能体分歧审查 |
-| 👤 **会员管理** | 多级会员体系、AI 模型个人配置、权限隔离 |
+行情按真实系统分层，Tushare、东方财富、腾讯为主源，AKShare 可作为可选交叉验证和备用历史行情源：
 
----
+- `data_provider.py`：数据源适配层，后续替换真实行情接口。
+- `quant_engine.py`：量化模型和评分。
+- `main.py`：API、WebSocket、静态页面托管。
+- `backtest_service.py`：无未来函数的策略回测、费用/滑点、最大回撤和参数扫描。
+- `akshare_service.py`：可选 AKShare 数据适配器。
 
-## 🚀 快速开始
+## 运行
 
-### 环境要求
-
-- Python 3.10+
-- Windows / macOS / Linux
-
-### 安装
-
-```bash
-# 1. 克隆仓库
-git clone https://github.com/yourname/LaomaStockAssistant.git
-cd LaomaStockAssistant
-
-# 2. 安装依赖
-pip install -r requirements.txt
-
-# 3. 配置环境变量
-cp .env.example .env
-# 编辑 .env 填入你的 API Key
-
-# 4. 启动服务
-python desktop_launcher.py
+```powershell
+cd C:\Users\GIGABYTE\Documents\Codex\2026-06-08\new-chat\work\ai-stock-platform
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8787
 ```
 
-服务启动后自动打开浏览器，访问 `http://127.0.0.1:8788`
+打开：
 
----
-
-## 🔑 数据源配置
-
-### 问财智能选股（iwencai.com）
-
-1. 用浏览器登录 [iwencai.com](https://www.iwencai.com)
-2. 打开开发者工具 → Application → Cookies → 找到 `hexin-v`
-3. 将值写入 `wencai_hexinv.txt` 文件
-
-### 东方财富妙想 AI
-
-1. 访问 [ai.eastmoney.com](https://ai.eastmoney.com)
-2. 获取 API Key 和 Cookie
-3. 分别写入 `eastmoney_api_key.txt` 和 `eastmoney_cookie.txt`
-
----
-
-## 🏗️ 技术架构
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                      前端层 (Web)                         │
-│  HTML + CSS + Vanilla JS    响应式适配 PC + 移动端        │
-├─────────────────────────────────────────────────────────┤
-│                      API 层 (FastAPI)                     │
-│  行情数据 / 选股扫描 / AI 分析 / 会员管理 / 风控引擎        │
-├─────────────────────────────────────────────────────────┤
-│                      数据层                              │
-│  AKShare / Tushare / 东方财富 / 问财 / 东财 AI           │
-└─────────────────────────────────────────────────────────┘
+```text
+http://127.0.0.1:8787
 ```
 
----
+## AI API 配置
 
-## 📁 项目结构
+不配置时默认使用本地规则引擎。
 
-```
-LaomaStockAssistant/
-├── app/                    ← 后端核心
-│   ├── main.py            ← FastAPI 入口
-│   ├── data_provider.py   ← 数据提供层
-│   ├── wencai_service.py  ← 问财服务
-│   ├── eastmoney_ai_service.py  ← 东财 AI 服务
-│   ├── screener_service.py      ← 选股引擎
-│   ├── quant_engine.py          ← 量化引擎
-│   ├── risk_engine.py           ← 风控引擎
-│   └── ...
-├── static/                 ← 前端资源
-│   ├── index.html
-│   ├── app.js
-│   └── styles.css
-├── data/                   ← 本地数据缓存
-├── tests/                  ← 测试用例
-├── requirements.txt
-├── desktop_launcher.py     ← 桌面启动器
-└── docker-compose.yml      ← Docker 部署
+管理员登录后，可以直接点击左侧“AI网关”打开模型配置。支持 DeepSeek、OpenAI 和其他 OpenAI Chat Completions 兼容接口；可测试连接、保存并立即切换模型。配置保存在本机 `%APPDATA%\LaomaStockAssistant\ai_config.json`，普通会员只能查看当前使用的模型，不能修改密钥。
+
+DeepSeek 示例：
+
+```powershell
+$env:AI_API_KEY="你的DeepSeek API Key"
+$env:AI_BASE_URL="https://api.deepseek.com/v1"
+$env:AI_MODEL="deepseek-chat"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8787
 ```
 
----
+OpenAI 兼容接口示例：
 
-## 🛡️ 安全与隐私
+```powershell
+$env:AI_API_KEY="你的API Key"
+$env:AI_BASE_URL="https://api.openai.com/v1"
+$env:AI_MODEL="gpt-4.1-mini"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8787
+```
 
-- 🔒 API Key 仅保存在本地配置文件，不上传服务器
-- 🔒 会员数据使用 PostgreSQL 本地存储
-- 🔒 交易相关操作仅模拟，不连接真实券商
+AI 分析会输出：
 
----
+- BUY / HOLD / REDUCE / SELL / WATCH 动作建议。
+- 置信度。
+- 仓位建议。
+- 买入区。
+- 减仓/卖出区。
+- 止损/失效条件。
+- 下一触发条件。
 
-## 📜 开源协议
+## 下一步
 
-[MIT License](LICENSE)
-
----
-
-## 🤝 贡献
-
-欢迎 Issue 和 PR！详见 [CONTRIBUTING.md](CONTRIBUTING.md)
-
----
-
-> **Made with ❤️ by 老马** — 长沙县果园镇 · 花果虾品牌
+- 接入真实 A 股行情源。
+- 接入公告、研报、资金流。
+- PostgreSQL 持久化自选股、提醒规则、分析报告。
+- Redis 缓存实时行情。
+- 登录、权限、内部部署。

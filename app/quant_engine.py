@@ -120,8 +120,9 @@ def build_watchlist_item(stock: Stock, market: MarketOverview) -> WatchlistItem:
     cost_valid = _cost_is_valid(stock)
     # 成本异常时不把错误的券商快照计入总盈亏，也不让它参与买卖信号。
     # 这比展示数千个百分点的“收益率”更安全；页面会同时标出待确认。
-    pnl_pct = stock.pnl_pct if cost_valid and stock.pnl_pct is not None else (0 if not cost_valid else (stock.price - stock.cost) / stock.cost * 100)
-    pnl_amount = stock.pnl_amount if cost_valid and stock.pnl_amount is not None else (0 if not cost_valid else (stock.price - stock.cost) * quantity)
+    # 盈亏按实时价重算：旧逻辑优先用券商快照值，price 更新后盈亏不跟着变
+    pnl_pct = (stock.price - stock.cost) / stock.cost * 100 if cost_valid else 0
+    pnl_amount = (stock.price - stock.cost) * quantity if cost_valid else 0
     previous_close = stock.price if stock.change_pct <= -99 else stock.price / (1 + stock.change_pct / 100)
     daily_pnl_amount = (stock.price - previous_close) * quantity
     return WatchlistItem(

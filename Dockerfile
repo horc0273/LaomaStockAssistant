@@ -4,7 +4,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ \
+ && pip config set global.trusted-host mirrors.aliyun.com \
+ && pip install --no-cache-dir --timeout 60 --retries 5 -r requirements.txt
 
 COPY app ./app
 COPY static ./static

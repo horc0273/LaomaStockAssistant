@@ -208,7 +208,7 @@ function safeRender(renderer, payload, targetId = '') {
     renderer(payload);
   } catch (error) {
     const target = targetId ? document.getElementById(targetId) : null;
-    if (target) target.innerHTML = `<div class="empty">该模块数据暂不可用，请稍后刷新。<br><small>${escapeHtml(error.message || error)}</small></div>`;
+    if (target) target.innerHTML = `<div class="empty">该模块数据暂不可用。<br><small>原因：${escapeHtml(error.message || error)}</small><br><button class="ghost-button" onclick="location.reload()" style="margin-top:8px">刷新页面重试</button></div>`;
     pushEvent(`页面模块渲染失败：${targetId || renderer.name} · ${error.message || error}`);
   }
 }
@@ -540,47 +540,6 @@ function renderAiRecommendations(data) {
     return;
   }
   target.innerHTML = `
-    <div class="ai-rec-head">
-      <div>
-        <b>AI 推荐盯盘池</b>
-        <span>${data.principle || '最多10只，只做盯盘验证。'}</span>
-      </div>
-      <small>闸门 ${gate.state || '-'} · ${gate.score || '-'}分 · ${data.updated_at || '-'}</small>
-    </div>
-    <div class="ai-rec-list">
-      ${items.map(item => `
-        <div class="ai-rec-item">
-          <div class="ai-rec-main">
-            <strong>${item.name} <small>${item.code}</small></strong>
-            <span class="${trend(item.change_pct)}">${Number(item.price || 0).toFixed(2)} ${fmtPct(item.change_pct || 0)}</span>
-            <em>${item.reason || ''}</em>
-          </div>
-          <div class="ai-rec-meta">
-            <span class="score-pill">AI ${item.score}</span>
-            <span class="tag ${item.action === 'PRIORITY_TRACK' ? 'green' : 'amber'}">${item.action}</span>
-            <small>成交额 ${Number(item.amount || 0).toFixed(2)}亿 · 主力 ${Number(item.main_net || 0).toFixed(2)}亿</small>
-          </div>
-          <div class="ai-rec-evidence">${(item.evidence || []).slice(0, 3).map(text => `<span>${text}</span>`).join('')}</div>
-          <button ${item.in_watchlist ? 'disabled' : ''} data-track-reco="${item.code}">
-            ${item.in_watchlist ? '已在盯盘' : '纳入盯盘'}
-          </button>
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
-
-function renderAiRecommendations(data) {
-  state.aiRecommendations = data;
-  const target = $('#aiRecommendations');
-  if (!target) return;
-  const items = (data.items || []).slice(0, 10);
-  const gate = data.market_gate || state.unifiedGate || {};
-  if (!items.length) {
-    target.innerHTML = '<div class="empty">暂时没有满足条件的AI推荐股。市场闸门不打开时，宁可少推。</div>';
-    return;
-  }
-  target.innerHTML = `
     <div class="ai-rec-head clean">
       <div>
         <b>AI 推荐盯盘池</b>
@@ -852,8 +811,6 @@ async function savePortfolioCash() {
 
 function renderQuantFundRadar(radar) {
   const data = radar || {};
-  $('#actionGate').insertAdjacentHTML('afterbegin', `<div class="warning ${unifiedGate.allowed ? '' : 'danger'}"><b>统一闸门：${unifiedGate.allowed ? '可进入人工确认' : '仅观察/减仓'}</b> ${escapeHtml((unifiedGate.reasons || []).join('；'))}</div>`);
-  if (gateHistory.length) $('#actionGate').insertAdjacentHTML('beforeend', `<small>闸门最近记录：${escapeHtml(gateHistory.length)} 条，最近一次 ${escapeHtml(gateHistory[0].created_at || '-')}（${gateHistory[0].allowed ? '通过' : '拦截'}）</small>`);
   const summary = data.summary || {};
   const tail = data.tail_session || {};
   const linkage = data.linkage || {};
@@ -912,6 +869,8 @@ function renderActionQueue(data) {
     <span>${data.updated_at || ''}</span>
     <p>${data.gate_reason || data.principle || ''}</p>
     <p><b>情绪量能：</b>${ev.state || '-'}，综合 ${ev.composite_score ?? '-'} / 情绪 ${ev.emotion_score ?? '-'} / 量能 ${ev.volume_score ?? '-'}；${ev.gate || ''}</p>
+    <p><b>统一闸门：</b>${unifiedGate.allowed ? '可进入人工确认' : '仅观察/减仓'}${(unifiedGate.reasons || []).length ? `（${escapeHtml(unifiedGate.reasons.join('；'))}）` : ''}${(unifiedGate.warnings || []).length ? ` <span class="warn">${escapeHtml(unifiedGate.warnings.join('；'))}</span>` : ''}</p>
+    ${gateHistory.length ? `<small>闸门最近记录 ${gateHistory.length} 条，最近一次 ${escapeHtml(gateHistory[0].created_at || '-')}（${gateHistory[0].allowed ? '通过' : '拦截'}）</small>` : ''}
   ` + pitfallChecksHtml(pitfallChecks, '交易前四问');
   const summary = data.summary || {};
   const summaryRows = [
@@ -1878,7 +1837,16 @@ function renderStrategyScan(data) {
   `;
 }
 
+const eventThrottleMap = new Map();
 function pushEvent(text) {
+  // 同一条提示 60 秒内只出现一次，避免实时推送把事件流刷屏。
+  const last = eventThrottleMap.get(text) || 0;
+  if (Date.now() - last < 60000) return;
+  eventThrottleMap.set(text, Date.now());
+  if (eventThrottleMap.size > 200) {
+    const oldest = [...eventThrottleMap.entries()].sort((a, b) => a[1] - b[1]).slice(0, 100);
+    oldest.forEach(([key]) => eventThrottleMap.delete(key));
+  }
   const line = document.createElement('div');
   line.className = 'event';
   line.textContent = `${new Date().toLocaleTimeString('zh-CN', { hour12: false })} · ${text}`;
@@ -3067,7 +3035,13 @@ async function createScreenerRecommendation(code, strategyName) {
 }
 
 async function loadRecommendationValidation() {
-  const data = await apiJson('/api/recommendations/validation?limit=100');
+  let data;
+  try {
+    data = await apiJson('/api/recommendations/validation?limit=100');
+  } catch (error) {
+    $('#recommendationValidation').innerHTML = `<div class="empty">推荐验证数据暂时拉不下来（${escapeHtml(error.message || error)}）。<br><small>多半是后端服务端报错，先去「数据健康」看服务状态；不影响其他模块继续用。</small></div>`;
+    return;
+  }
   renderScreenerSource(data);
   const rows = data.items || [];
   const pitfallChecks = [
@@ -3262,7 +3236,12 @@ async function scoreHubCandidate(code, persist = false) {
   }, {once: true});
 }
 
+let loadAllInFlight = false;
 async function loadAll() {
+  // 加并发锁：上一轮 29 个接口没回来就不发起下一轮，避免请求越积越多。
+  if (loadAllInFlight) return;
+  loadAllInFlight = true;
+  try {
   const [mobileDashboard, market, watchlist, candidates, portfolio, actionQueue, tradeLog, eaSimulation, emotionVolume, hiddenFundProxy, sectors, funds, events, strategyScan, dataQuality, breadth, coverage, movers, systemAudit, chokepointAtlas, breakthroughReview, agentDebate, serenityFramework, dataSourcePlan, quantUpgradePlan, aiRecommendations, dailyReview, decisionFusion, membershipPlans] = await Promise.all([
     safeApiJson('/api/mobile/dashboard'),
     safeApiJson('/api/market/overview'),
@@ -3326,6 +3305,9 @@ async function loadAll() {
   ensureStrategyWorkflowCenter();
   // 登录/刷新后低频预热行情源；服务端自带 5 分钟幂等节流，不会重复请求上游。
   apiJson('/api/data-sources/preheat').catch(error => pushEvent(`数据预热暂不可用：${error.message || error}`));
+  } finally {
+    loadAllInFlight = false;
+  }
 }
 
 function syncMobileNavigation(activeView) {
@@ -3338,6 +3320,10 @@ async function login(event) {
   event.preventDefault();
   const username = $('#loginUsername').value.trim();
   const password = $('#loginPassword').value;
+  await doLogin(username, password);
+}
+
+async function doLogin(username, password) {
   $('#loginError').textContent = '';
   let result;
   try {
@@ -3376,11 +3362,12 @@ async function registerByPhone(event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, display_name: displayName, password }),
     });
-    $('#loginUsername').value = result.user?.phone || phone;
-    $('#loginPassword').value = password;
+    // 注册成功直接登录进工作台，少一次手动点击。
     $('#registerForm').classList.add('hidden');
     $('#loginForm').classList.remove('hidden');
-    $('#loginError').textContent = '注册成功，已为你填入手机号，可以直接登录。';
+    $('#loginUsername').value = result.user?.phone || phone;
+    $('#loginPassword').value = password;
+    await doLogin(result.user?.phone || phone, password);
   } catch (error) {
     $('#registerError').textContent = error.message || '注册失败，请检查手机号或稍后再试。';
   }
@@ -3400,6 +3387,8 @@ async function initAuth() {
     renderUserBadge(result.user);
   } catch (error) {
     showLogin();
+    const button = $('#aiGatewayButton');
+    if (button) button.textContent = 'AI网关：登录后启用';
     return;
   }
   try {
@@ -3443,14 +3432,6 @@ async function addStock(code) {
   } finally {
     if (button) button.disabled = false;
   }
-  return;
-  await fetch('/api/watchlist', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
-  });
-  pushEvent(`${code} 已加入自选，开始进入模型监控。`);
-  await loadAll();
 }
 
 async function trackRecommendation(code) {
@@ -3466,14 +3447,6 @@ async function trackRecommendation(code) {
   } catch (error) {
     pushEvent(`${code} 推荐加入失败，请稍后再试。`);
   }
-  return;
-  await fetch('/api/recommendations/track', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
-  });
-  pushEvent(`${code} 已按AI推荐纳入盯盘，并记录推荐基准价。`);
-  await loadAll();
 }
 
 async function removeStock(code) {
@@ -3541,9 +3514,26 @@ async function recordTradeAction(code, mode) {
   renderTradeLog(log);
 }
 
+let wsRetryCount = 0;
+let wsAvailable = null; // null=未检测, true/false=已检测
 function connectWs() {
   connectSse();
-  const ws = new WebSocket(`ws://${location.host}/ws/market`);
+  // 先探测 WS 端点是否存在，404 就直接用 SSE 兜底，避免控制台刷错误
+  if (wsAvailable === false) return;
+  if (wsAvailable === null) {
+    wsAvailable = false;
+    fetch('/ws/market', { method: 'HEAD' })
+      .then(r => { if (r.status < 400) { wsAvailable = true; doConnectWs(); } })
+      .catch(() => {});
+    return;
+  }
+  doConnectWs();
+}
+
+function doConnectWs() {
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${protocol}://${location.host}/ws/market`);
+  ws.onopen = () => { wsRetryCount = 0; };
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
     if (data.type !== 'tick') return;
@@ -3552,7 +3542,11 @@ function connectWs() {
     }
     pushEvent('行情推送更新，模型等待下一次评分刷新。');
   };
-  ws.onclose = () => setTimeout(connectWs, 2000);
+  ws.onclose = () => {
+    if (wsRetryCount >= 3) return;
+    wsRetryCount += 1;
+    setTimeout(doConnectWs, Math.min(3000 * wsRetryCount, 30000));
+  };
 }
 
 let marketEventSource = null;
@@ -3609,20 +3603,10 @@ document.querySelectorAll('.nav').forEach(button => {
     button.classList.add('active');
     $(`#${button.dataset.view}`).classList.add('active');
     $('#pageTitle').textContent = button.textContent;
-    const mobileView = ['opportunities', 'holdings', 'signals', 'review', 'admin'].includes(button.dataset.view) ? button.dataset.view : 'opportunities';
-    syncMobileNavigation(mobileView);
-    if (button.dataset.view === 'opportunities') loadOpportunities();
-    if (button.dataset.view === 'holdings') loadHoldingsDiagnosis();
-    if (button.dataset.view === 'signals') loadSignals();
-    if (button.dataset.view === 'review') { loadDailyReview(); loadReviewStats(); }
-    if (button.dataset.view === 'abnormal') initAbnormalMonitor();
-    if (button.dataset.view === 'screener') initSmartScreener();
-    if (button.dataset.view === 'ai-tools') initAITools();
-    if (button.dataset.view === 'admin') loadAdminMembers();
+    const mobileView = ['dashboard', 'watchlist', 'trading', 'screener', 'admin'].includes(button.dataset.view) ? button.dataset.view : 'screener';
     syncMobileNavigation(mobileView);
     if (button.dataset.view === 'abnormal') initAbnormalMonitor();
     if (button.dataset.view === 'screener') initSmartScreener();
-    if (button.dataset.view === 'ai-tools') initAITools();
     if (button.dataset.view === 'admin') loadAdminMembers();
   });
 });
@@ -3949,554 +3933,137 @@ $('#backToLogin')?.addEventListener('click', () => {
   $('#loginError').textContent = '';
 });
 
-setInterval(setClock, 1000);
-setInterval(() => {
-  if (state.currentUser && !window.matchMedia('(max-width: 820px)').matches) loadAll();
-}, 10000);
-setClock();
-applyReviewTheme(state.reviewTheme);
-syncMobileNavigation('opportunities');
-initAuth();
-
-
-/* ========== AI 工具中心（问财 + 东财） ========== */
-
-function initAITools() {
-  // AI 工具 Tab 切换
-  document.querySelectorAll('[data-ai-tab]').forEach(button => {
-    button.addEventListener('click', () => {
-      document.querySelectorAll('[data-ai-tab]').forEach(item => item.classList.remove('active'));
-      document.querySelectorAll('[data-ai-pane]').forEach(item => item.classList.remove('active'));
-      button.classList.add('active');
-      document.querySelector(`[data-ai-pane="${button.dataset.aiTab}"]`)?.classList.add('active');
-    });
-  });
-
-  // 问财选股
-  $('#runWencaiQuery')?.addEventListener('click', runWencaiQuery);
-  $('#wencaiQueryInput')?.addEventListener('keydown', event => {
-    if (event.key === 'Enter') runWencaiQuery();
-  });
-
-  // 东财热点
-  $('#runEastMoneyHotspot')?.addEventListener('click', runEastMoneyHotspot);
-
-  // 东财个股分析
-  $('#runEastMoneyAnalysis')?.addEventListener('click', runEastMoneyAnalysis);
-  $('#eastmoneyAnalysisCode')?.addEventListener('keydown', event => {
-    if (event.key === 'Enter') runEastMoneyAnalysis();
-  });
-
-  // 东财问答
-  $('#runEastMoneyQA')?.addEventListener('click', runEastMoneyQA);
-  $('#eastmoneyQAQuestion')?.addEventListener('keydown', event => {
-    if (event.key === 'Enter') runEastMoneyQA();
-  });
-
-  // 加载状态指示
-  const statusNode = $('#aiToolsSourceStatus');
-  if (statusNode) {
-    statusNode.textContent = '已就绪';
-    statusNode.style.color = '#16a34a';
+// ===== 今日作战节奏条：按交易时段告诉用户现在最该看什么 =====
+function getSessionPhase(now = new Date()) {
+  const day = now.getDay();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  if (day === 0 || day === 6) {
+    return {
+      key: 'closed', tone: 'neutral', phase: '休市 · 周末',
+      focus: '复盘补课时间：把本周的交易日志、推荐验证和产业链报告过一遍，比盯盘更有价值。',
+      actions: [
+        { view: 'review', label: '复盘中心' },
+        { view: 'research', label: '研究中心' },
+        { view: 'screener', label: '推荐验证' },
+      ],
+    };
   }
+  if (mins < 9 * 60 + 15) {
+    return {
+      key: 'pre-open', tone: 'blue', phase: '盘前准备',
+      focus: '先看早盘风险简报和外盘，再确认昨日复盘里的明日计划；动作队列里的待确认项现在处理。',
+      actions: [
+        { view: 'dashboard', label: '早盘风险简报' },
+        { view: 'review', label: '昨日复盘' },
+        { view: 'trading', label: '待确认动作' },
+      ],
+    };
+  }
+  if (mins < 9 * 60 + 25) {
+    return {
+      key: 'auction', tone: 'amber', phase: '集合竞价',
+      focus: '9:20 前挂单可撤、之后不可撤；重点看自选股竞价异动和大盘高开低开，先别急着下单。',
+      actions: [
+        { view: 'watchlist', label: '自选竞价' },
+        { view: 'dashboard', label: '大盘情绪' },
+      ],
+    };
+  }
+  if (mins < 9 * 60 + 30) {
+    return {
+      key: 'pre-open-final', tone: 'amber', phase: '竞价结束 · 待开盘',
+      focus: '竞价结果已定，最后核对一次今日计划：开仓价、止损价、单票仓位上限。',
+      actions: [
+        { view: 'trading', label: '动作队列' },
+        { view: 'watchlist', label: '自选持仓' },
+      ],
+    };
+  }
+  if (mins < 11 * 60 + 30) {
+    return {
+      key: 'morning', tone: 'green', phase: '盘中 · 上午',
+      focus: '盯两件事：异动监控的实时信号 + 持仓盈亏触发提醒；AI 推荐先纳入盯盘，不急着追。',
+      actions: [
+        { view: 'abnormal', label: '异动监控' },
+        { view: 'watchlist', label: '持仓盈亏' },
+        { view: 'dashboard', label: 'AI 盘中判断' },
+      ],
+    };
+  }
+  if (mins < 13 * 60) {
+    return {
+      key: 'lunch', tone: 'neutral', phase: '午间休市',
+      focus: '上午的冲动现在冷静看：动作队列里上午记录的单子，中午复核一遍逻辑还成不成立。',
+      actions: [
+        { view: 'trading', label: '复核动作队列' },
+        { view: 'market', label: '板块资金流' },
+      ],
+    };
+  }
+  if (mins < 14 * 60 + 55) {
+    return {
+      key: 'afternoon', tone: 'green', phase: '盘中 · 下午',
+      focus: '重点看量能和板块轮动是否延续；尾盘拉高的板块要警惕第二天低开。',
+      actions: [
+        { view: 'abnormal', label: '异动监控' },
+        { view: 'market', label: '板块强弱' },
+        { view: 'dashboard', label: 'AI 盘中判断' },
+      ],
+    };
+  }
+  if (mins < 15 * 60) {
+    return {
+      key: 'tail', tone: 'amber', phase: '尾盘 14:55-15:00',
+      focus: '最后五分钟：只处理计划内的动作，不临时起意；反量化尾盘策略现在最关键。',
+      actions: [
+        { view: 'trading', label: '动作队列' },
+        { view: 'dashboard', label: '反量化雷达' },
+      ],
+    };
+  }
+  return {
+    key: 'after-close', tone: 'blue', phase: '盘后复盘',
+    focus: '收盘三件事：保存今日复盘、验证推荐股票的实际表现、把明天要盯的标的放进观察池。',
+    actions: [
+      { view: 'review', label: '保存今日复盘' },
+      { view: 'screener', label: '推荐验证' },
+      { view: 'watchlist', label: '自选持仓' },
+    ],
+  };
 }
 
-/* --- 问财选股 --- */
-async function runWencaiQuery() {
-  const query = $('#wencaiQueryInput')?.value?.trim();
-  const resultNode = $('#wencaiResult');
-  if (!query) {
-    resultNode.innerHTML = '<div class="empty">请输入选股条件。</div>';
-    return;
-  }
-  const limit = parseInt($('#wencaiLimit')?.value || '20', 10);
-  const sort = $('#wencaiSort')?.value || '';
-
-  resultNode.innerHTML = '<div class="empty">问财选股中，请稍候...</div>';
-  try {
-    const data = await apiJson('/api/wencai/query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, limit, sort }),
-    });
-    renderWencaiResult(data, resultNode);
-  } catch (error) {
-    resultNode.innerHTML = `<div class="empty">问财选股失败：${escapeHtml(error.message || '未知错误')}</div>`;
-  }
-}
-
-function renderWencaiResult(data, container) {
-  if (!data || data.error) {
-    container.innerHTML = `<div class="empty">${escapeHtml(data?.error || '未返回结果')}</div>`;
-    return;
-  }
-  const stocks = data.stocks || [];
-  if (stocks.length === 0) {
-    container.innerHTML = '<div class="empty">未找到符合条件的股票。</div>';
-    return;
-  }
-
-  const headers = data.headers || [];
-  let html = '<table class="screener-table"><thead><tr>';
-  headers.forEach(h => {
-    html += `<th>${escapeHtml(h)}</th>`;
-  });
-  html += '</tr></thead><tbody>';
-
-  stocks.forEach(stock => {
-    html += '<tr>';
-    headers.forEach(h => {
-      const val = stock[h] !== undefined ? stock[h] : '';
-      html += `<td>${escapeHtml(String(val))}</td>`;
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
-  html += `<p class="screener-meta">共 ${stocks.length} 条结果 · 来源：同花顺问财</p>`;
-  container.innerHTML = html;
-}
-
-/* --- 东财热点 --- */
-async function runEastMoneyHotspot() {
-  const query = $('#eastmoneyHotspotQuery')?.value?.trim();
-  const type = $('#eastmoneyHotspotType')?.value || 'all';
-  const limit = parseInt($('#eastmoneyHotspotLimit')?.value || '20', 10);
-  const resultNode = $('#eastmoneyHotspotResult');
-
-  resultNode.innerHTML = '<div class="empty">正在获取热点数据...</div>';
-  try {
-    const params = new URLSearchParams({ type, limit: String(limit) });
-    if (query) params.append('query', query);
-    const data = await apiJson('/api/eastmoney-ai/hotspot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: query || '今日热点', type, limit }),
-    });
-    renderEastMoneyHotspotResult(data, resultNode);
-  } catch (error) {
-    resultNode.innerHTML = `<div class="empty">获取热点失败：${escapeHtml(error.message || '未知错误')}</div>`;
-  }
-}
-
-function renderEastMoneyHotspotResult(data, container) {
-  if (!data || data.error) {
-    container.innerHTML = `<div class="empty">${escapeHtml(data?.error || '未返回结果')}</div>`;
-    return;
-  }
-  const hotspots = data.hotspots || [];
-  if (hotspots.length === 0) {
-    container.innerHTML = '<div class="empty">暂无热点数据。</div>';
-    return;
-  }
-
-  let html = '<div class="hotspot-grid">';
-  hotspots.forEach(item => {
-    html += `<div class="hotspot-card">
-      <div class="hotspot-name">${escapeHtml(item.name || '')}</div>
-      <div class="hotspot-meta">
-        <span class="tag ${item.change >= 0 ? 'green' : 'red'}">${item.change >= 0 ? '+' : ''}${item.change?.toFixed(2) || '0.00'}%</span>
-        <span>资金流入: ${escapeHtml(String(item.inflow || '--'))}</span>
-      </div>
-      <div class="hotspot-desc">${escapeHtml(item.description || '')}</div>
-    </div>`;
-  });
-  html += '</div>';
-  html += `<p class="screener-meta">共 ${hotspots.length} 条热点 · 来源：东方财富</p>`;
-  container.innerHTML = html;
-}
-
-/* --- 东财个股分析 --- */
-async function runEastMoneyAnalysis() {
-  const code = $('#eastmoneyAnalysisCode')?.value?.trim();
-  const analysisType = $('#eastmoneyAnalysisType')?.value || 'comprehensive';
-  const resultNode = $('#eastmoneyAnalysisResult');
-  if (!code) {
-    resultNode.innerHTML = '<div class="empty">请输入股票代码。</div>';
-    return;
-  }
-
-  resultNode.innerHTML = '<div class="empty">AI 分析中，请稍候...</div>';
-  try {
-    const data = await apiJson('/api/eastmoney-ai/stock-analysis', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, type: analysisType }),
-    });
-    renderEastMoneyAnalysisResult(data, resultNode);
-  } catch (error) {
-    resultNode.innerHTML = `<div class="empty">分析失败：${escapeHtml(error.message || '未知错误')}</div>`;
-  }
-}
-
-function renderEastMoneyAnalysisResult(data, container) {
-  if (!data || data.error) {
-    container.innerHTML = `<div class="empty">${escapeHtml(data?.error || '未返回结果')}</div>`;
-    return;
-  }
-  const analysis = data.analysis || data;
-  let html = '<div class="ai-analysis-result">';
-  html += `<h4>${escapeHtml(analysis.stock_name || data.code || '')} (${escapeHtml(data.code || '')})</h4>`;
-  if (analysis.summary) {
-    html += `<div class="analysis-section"><b>综合结论</b><p>${escapeHtml(analysis.summary)}</p></div>`;
-  }
-  if (analysis.fund_flow) {
-    html += `<div class="analysis-section"><b>资金流向</b><p>${escapeHtml(analysis.fund_flow)}</p></div>`;
-  }
-  if (analysis.technical) {
-    html += `<div class="analysis-section"><b>技术面</b><p>${escapeHtml(analysis.technical)}</p></div>`;
-  }
-  if (analysis.fundamental) {
-    html += `<div class="analysis-section"><b>基本面</b><p>${escapeHtml(analysis.fundamental)}</p></div>`;
-  }
-  if (analysis.risk) {
-    html += `<div class="analysis-section"><b>风险提示</b><p>${escapeHtml(analysis.risk)}</p></div>`;
-  }
-  if (analysis.raw) {
-    html += `<div class="analysis-section"><b>原始分析</b><pre>${escapeHtml(JSON.stringify(analysis.raw, null, 2))}</pre></div>`;
-  }
-  html += '</div>';
-  html += `<p class="screener-meta">来源：东方财富妙想 AI · 仅供参考</p>`;
-  container.innerHTML = html;
-}
-
-/* --- 东财问答 --- */
-async function runEastMoneyQA() {
-  const question = $('#eastmoneyQAQuestion')?.value?.trim();
-  const resultNode = $('#eastmoneyQAResult');
-  if (!question) {
-    resultNode.innerHTML = '<div class="empty">请输入问题。</div>';
-    return;
-  }
-
-  resultNode.innerHTML = '<div class="empty">AI 思考中，请稍候...</div>';
-  try {
-    const data = await apiJson('/api/eastmoney-ai/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
-    });
-    renderEastMoneyQAResult(data, resultNode);
-  } catch (error) {
-    resultNode.innerHTML = `<div class="empty">问答失败：${escapeHtml(error.message || '未知错误')}</div>`;
-  }
-}
-
-function renderEastMoneyQAResult(data, container) {
-  if (!data || data.error) {
-    container.innerHTML = `<div class="empty">${escapeHtml(data?.error || '未返回结果')}</div>`;
-    return;
-  }
-  const answer = data.answer || data.response || data.content || JSON.stringify(data, null, 2);
-  let html = '<div class="ai-qa-result">';
-  html += `<div class="qa-question"><b>Q:</b> ${escapeHtml($('#eastmoneyQAQuestion')?.value || '')}</div>`;
-  html += `<div class="qa-answer"><b>A:</b> ${escapeHtml(String(answer)).replace(/\n/g, '<br>')}</div>`;
-  html += '</div>';
-  html += `<p class="screener-meta">来源：东方财富妙想 AI · 仅供参考</p>`;
-  container.innerHTML = html;
-}
-
-/* 辅助函数 */
-function escapeHtml(text) {
-  if (text == null) return '';
-  const div = document.createElement('div');
-  div.textContent = String(text);
-  return div.innerHTML;
-}
-
-
-
-/* ========== v2.0 决策辅助：信号 / 持仓诊断 / 复盘 ========== */
-
-async function loadSignals() {
-  const body = $('#signalsBody');
-  if (!body) return;
-  body.innerHTML = '<div class="empty">正在生成交易信号...</div>';
-  try {
-    const data = await apiJson('/api/signals/list');
-    renderSignals(data.items || [], body);
-  } catch (error) {
-    body.innerHTML = `<div class="empty">信号加载失败：${escapeHtml(error.message || '未知错误')}</div>`;
-  }
-}
-
-function renderSignals(signals, container) {
-  if (!signals.length) {
-    container.innerHTML = '<div class="empty">暂无待处理信号。</div>';
-    return;
-  }
-  const priorityColor = { high: 'red', medium: 'amber', low: 'green' };
-  const typeLabel = { buy: '买入', sell: '卖出', ttrade: '做T', stop_loss: '止损', take_profit: '止盈', alert: '预警' };
-  let html = '<div class="signal-cards">';
-  signals.forEach(sig => {
-    const color = priorityColor[sig.priority] || 'gray';
-    const tlabel = typeLabel[sig.type] || sig.type;
-    html += `<div class="signal-card ${color}" data-signal-id="${escapeHtml(sig.id)}">
-      <div class="signal-header">
-        <span class="signal-type">${escapeHtml(tlabel)}</span>
-        <span class="signal-priority tag ${color}">${escapeHtml(sig.priority)}</span>
-        <span class="signal-confidence">置信度 ${sig.confidence}%</span>
-      </div>
-      <div class="signal-body">
-        <h4>${escapeHtml(sig.name)} (${escapeHtml(sig.code)})</h4>
-        <p>${escapeHtml(sig.trigger_reason)}</p>
-        <div class="signal-meta">
-          <span>建议价 ¥${sig.suggested_price}</span>
-          ${sig.stop_loss ? `<span>止损 ¥${sig.stop_loss}</span>` : ''}
-          ${sig.target ? `<span>目标 ¥${sig.target}</span>` : ''}
-          ${sig.win_rate ? `<span>胜率 ${(sig.win_rate * 100).toFixed(0)}%</span>` : ''}
-        </div>
-      </div>
-      <div class="signal-actions">
-        <button class="primary" data-sig-execute="${escapeHtml(sig.id)}">执行</button>
-        <button data-sig-dismiss="${escapeHtml(sig.id)}">忽略</button>
-        <button data-sig-snooze="${escapeHtml(sig.id)}">延后</button>
-      </div>
-    </div>`;
-  });
-  html += '</div>';
-  container.innerHTML = html;
-
-  // 绑定按钮事件
-  container.querySelectorAll('[data-sig-execute]').forEach(btn => {
-    btn.addEventListener('click', () => executeSignal(btn.dataset.sigExecute));
-  });
-  container.querySelectorAll('[data-sig-dismiss]').forEach(btn => {
-    btn.addEventListener('click', () => dismissSignal(btn.dataset.sigDismiss));
-  });
-  container.querySelectorAll('[data-sig-snooze]').forEach(btn => {
-    btn.addEventListener('click', () => snoozeSignal(btn.dataset.sigSnooze));
-  });
-}
-
-async function executeSignal(signalId) {
-  const price = prompt('请输入执行价格（留空使用建议价）：');
-  if (price === null) return;
-  const executedPrice = parseFloat(price) || 0;
-  try {
-    await apiJson('/api/signals/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ signal_id: signalId, executed_price: executedPrice }),
-    });
-    pushEvent('信号已执行');
-    loadSignals();
-  } catch (error) {
-    pushEvent(`信号执行失败：${error.message || error}`, 'warn');
-  }
-}
-
-async function dismissSignal(signalId) {
-  const reason = prompt('忽略原因（可选）：') || '';
-  try {
-    await apiJson('/api/signals/dismiss', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ signal_id: signalId, reason }),
-    });
-    pushEvent('信号已忽略');
-    loadSignals();
-  } catch (error) {
-    pushEvent(`信号忽略失败：${error.message || error}`, 'warn');
-  }
-}
-
-async function snoozeSignal(signalId) {
-  try {
-    await apiJson('/api/signals/dismiss', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ signal_id: signalId, reason: '延后处理' }),
-    });
-    pushEvent('信号已延后');
-    loadSignals();
-  } catch (error) {
-    pushEvent(`信号延后失败：${error.message || error}`, 'warn');
-  }
-}
-
-async function loadHoldingsDiagnosis() {
-  const body = $('#holdingsBody');
-  if (!body) return;
-  body.innerHTML = '<div class="empty">正在诊断持仓...</div>';
-  try {
-    const data = await apiJson('/api/holdings/diagnose');
-    renderHoldingsDiagnosis(data.items || [], body);
-  } catch (error) {
-    body.innerHTML = `<div class="empty">持仓诊断失败：${escapeHtml(error.message || '未知错误')}</div>`;
-  }
-}
-
-function renderHoldingsDiagnosis(diagnoses, container) {
-  if (!diagnoses.length) {
-    container.innerHTML = '<div class="empty">暂无持仓。</div>';
-    return;
-  }
-  const trendColor = { strong: 'green', moderate: 'blue', weak: 'red', neutral: 'gray' };
-  const riskColor = { low: 'green', medium: 'amber', high: 'red' };
-  let html = '<div class="diagnosis-cards">';
-  diagnoses.forEach(d => {
-    const tcolor = trendColor[d.trend] || 'gray';
-    const rcolor = riskColor[d.risk_level] || 'gray';
-    const healthClass = d.health_score >= 70 ? 'good' : d.health_score >= 40 ? 'warning' : 'danger';
-    html += `<div class="diagnosis-card ${healthClass}">
-      <div class="diagnosis-header">
-        <h4>${escapeHtml(d.name)} (${escapeHtml(d.code)})</h4>
-        <div class="diagnosis-badges">
-          <span class="tag ${tcolor}">趋势: ${escapeHtml(d.trend)}</span>
-          <span class="tag ${rcolor}">风险: ${escapeHtml(d.risk_level)}</span>
-          <span class="health-score ${healthClass}">${d.health_score}分</span>
-        </div>
-      </div>
-      <div class="diagnosis-body">
-        <p><b>诊断：</b>${escapeHtml(d.diagnosis)}</p>
-        <p><b>建议：</b>${escapeHtml(d.suggestion)}</p>
-        ${d.pnl_pct ? `<p class="pnl ${d.pnl_pct >= 0 ? 'up' : 'down'}">浮盈亏: ${fmtPct(d.pnl_pct)}</p>` : ''}
-      </div>
-      ${d.attribution ? `<div class="attribution-panel">
-        <b>波动归因</b>
-        <div class="attribution-grid">
-          <div>技术面: ${fmtPct(d.attribution.technical?.contribution || 0)}</div>
-          <div>板块: ${fmtPct(d.attribution.sector?.contribution || 0)}</div>
-          <div>资金: ${fmtPct(d.attribution.fund_flow?.contribution || 0)}</div>
-          <div>消息: ${fmtPct(d.attribution.news?.contribution || 0)}</div>
-        </div>
-      </div>` : ''}
-    </div>`;
-  });
-  html += '</div>';
-  container.innerHTML = html;
-}
-
-async function loadReviewStats() {
-  const container = $('#reviewStatsPanel');
-  if (!container) return;
-  try {
-    const data = await apiJson('/api/review/stats?days=7');
-    renderReviewStats(data.stats || {}, container);
-  } catch (error) {
-    container.innerHTML = `<div class="empty">统计加载失败：${escapeHtml(error.message || '未知错误')}</div>`;
-  }
-}
-
-function renderReviewStats(stats, container) {
-  const hitRate = stats.hit_rate || 0;
-  const hitColor = hitRate >= 0.5 ? 'green' : hitRate >= 0.3 ? 'amber' : 'red';
-  container.innerHTML = `
-    <div class="review-stats-grid">
-      <div class="stat-card">
-        <div class="stat-value">${stats.total_signals || 0}</div>
-        <div class="stat-label">7日信号总数</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value ${hitColor}">${(hitRate * 100).toFixed(0)}%</div>
-        <div class="stat-label">命中率</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${stats.executed || 0}</div>
-        <div class="stat-label">已执行</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${stats.profit?.toFixed(2) || '0.00'}</div>
-        <div class="stat-label">累计盈亏</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${stats.pending || 0}</div>
-        <div class="stat-label">待处理</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${stats.ignored || 0}</div>
-        <div class="stat-label">已忽略</div>
-      </div>
+function renderSessionGuide() {
+  const target = $('#sessionGuide');
+  if (!target) return;
+  const phase = getSessionPhase();
+  target.className = `session-guide tone-${phase.tone}`;
+  target.innerHTML = `
+    <div class="session-guide-main">
+      <span class="session-guide-phase">${phase.phase}</span>
+      <p>${phase.focus}</p>
     </div>
+    <div class="session-guide-actions">
+      ${phase.actions.map(action => `<button type="button" data-view-jump="${action.view}">${action.label}</button>`).join('')}
+    </div>
+    <small class="session-guide-note">按交易日时间自动切换 · 法定节假日以交易所安排为准</small>
   `;
 }
 
-async function loadOpportunities() {
-  const body = $('#opportunitiesBody');
-  if (!body) return;
-  body.innerHTML = '<div class="empty">正在扫描市场机会...</div>';
-  try {
-    // 并行加载问财推荐、AI推荐和候选评分
-    const [reco, candidates] = await Promise.all([
-      safeApiJson('/api/recommendations/ai?limit=6'),
-      safeApiJson('/api/research/candidates'),
-    ]);
-    const items = (reco.items || []).concat((candidates || []).slice(0, 6));
-    renderOpportunities(items, body);
-  } catch (error) {
-    body.innerHTML = `<div class="empty">机会扫描失败：${escapeHtml(error.message || '未知错误')}</div>`;
-  }
-}
-
-function renderOpportunities(items, container) {
-  if (!items.length) {
-    container.innerHTML = '<div class="empty">暂无推荐机会。</div>';
-    return;
-  }
-  let html = '<div class="opportunity-cards">';
-  items.forEach(item => {
-    const code = item.code || '';
-    const name = item.name || item.stock_name || '';
-    const score = item.score || item.total_score || 0;
-    const action = item.action || item.signal_label || '观察';
-    const reason = item.reason || item.trigger_reason || '';
-    const changePct = item.change_pct || 0;
-    const price = item.price || 0;
-    html += `<div class="opportunity-card">
-      <div class="opp-header">
-        <h4>${escapeHtml(name)} (${escapeHtml(code)})</h4>
-        <span class="tag ${changePct >= 0 ? 'green' : 'red'}">${fmtPct(changePct / 100)}</span>
-      </div>
-      <div class="opp-body">
-        <p><b>评分:</b> ${score} · <b>动作:</b> ${escapeHtml(action)}</p>
-        <p>${escapeHtml(reason)}</p>
-        ${price ? `<p>当前价 ¥${price}</p>` : ''}
-      </div>
-      <div class="opp-actions">
-        <button class="primary" data-track-reco="${escapeHtml(code)}">+ 关注</button>
-        <button data-ai="${escapeHtml(code)}" data-name="${escapeHtml(name)}">AI 分析</button>
-      </div>
-    </div>`;
-  });
-  html += '</div>';
-  container.innerHTML = html;
-}
-
-// 在 review section 中插入信号统计面板
-function injectReviewStatsPanel() {
-  const reviewSection = $('#review');
-  if (!reviewSection || reviewSection.querySelector('#reviewStatsPanel')) return;
-  const panel = document.createElement('div');
-  panel.id = 'reviewStatsPanel';
-  panel.className = 'panel';
-  panel.innerHTML = '<div class="section-head"><h2>信号胜率统计</h2></div><div class="empty">正在加载统计...</div>';
-  const firstPanel = reviewSection.querySelector('.panel');
-  if (firstPanel) {
-    reviewSection.insertBefore(panel, firstPanel);
-  }
-}
-
-// 绑定事件
-$('#signalsBody')?.addEventListener('click', event => {
-  const executeBtn = event.target.closest('[data-sig-execute]');
-  if (executeBtn) return executeSignal(executeBtn.dataset.sigExecute);
-  const dismissBtn = event.target.closest('[data-sig-dismiss]');
-  if (dismissBtn) return dismissSignal(dismissBtn.dataset.sigDismiss);
-  const snoozeBtn = event.target.closest('[data-sig-snooze]');
-  if (snoozeBtn) return snoozeSignal(snoozeBtn.dataset.sigSnooze);
+$('#sessionGuide')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-view-jump]');
+  if (!button) return;
+  document.querySelector(`.nav[data-view="${button.dataset.viewJump}"]`)?.click();
 });
 
-$('#opportunitiesBody')?.addEventListener('click', event => {
-  const trackBtn = event.target.closest('[data-track-reco]');
-  if (trackBtn) return trackRecommendation(trackBtn.dataset.trackReco);
-  const aiBtn = event.target.closest('[data-ai]');
-  if (aiBtn) return analyzeStock(aiBtn.dataset.ai, aiBtn.dataset.name);
-});
-
-$('#holdingsBody')?.addEventListener('click', event => {
-  const aiBtn = event.target.closest('[data-ai]');
-  if (aiBtn) return analyzeStock(aiBtn.dataset.ai, aiBtn.dataset.name);
-});
-
-// 初始化时注入 review 统计面板
-injectReviewStatsPanel();
+setInterval(setClock, 1000);
+setInterval(() => {
+  // 切走的标签页暂停全量轮询，回到前台由 visibilitychange 立即补一次。
+  if (document.hidden) return;
+  if (state.currentUser && !window.matchMedia('(max-width: 820px)').matches) loadAll();
+}, 10000);
+setClock();
+renderSessionGuide();
+setInterval(renderSessionGuide, 30000);
+applyReviewTheme(state.reviewTheme);
+syncMobileNavigation('dashboard');
+initAuth();

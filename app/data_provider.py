@@ -14,6 +14,7 @@ import requests
 
 from .akshare_service import AKShareService
 from .models import MarketIndex, MarketOverview, Stock
+from .holdings_config import load_holdings
 from .infrastructure import Persistence, RedisCache
 from .market_intelligence import MarketIntelligenceService
 from .market_data_gateway import collect_paginated_batches
@@ -22,29 +23,11 @@ from .tushare_service import TushareService
 from .trading_gate import calculate_unified_gate
 from .wencai_service import WencaiService
 from .eastmoney_ai_service import EastMoneyAIService
-from .signal_engine import SignalEngine
-from .holding_diagnosis import HoldingDiagnosisEngine
-from .eastmoney_ai_service import EastMoneyAIService
 
 
 
-STOCK_UNIVERSE: list[Stock] = [
-    Stock(market="A股", name="北方铜业", code="000737.SZ", price=12.740, change_pct=-1.40, cost=19.590, quantity=500, pnl_amount=-3425.10, pnl_pct=-34.97, tag="资源", ai="真实持仓，跌幅较深，优先监控20线修复和止跌结构", keys="beifangtongye bfty 000737"),
-    Stock(market="A股", name="新大陆", code="000997.SZ", price=18.030, change_pct=-0.17, cost=22.637, quantity=700, pnl_amount=-3225.16, pnl_pct=-20.35, tag="数字乡村", ai="真实持仓，按2060战法观察缩量回踩与20线收复", keys="xindalu xdl 000997 shuzixiangcun dianzifapiao rfid"),
-    Stock(market="A股", name="沃尔核材", code="002130.SZ", price=19.420, change_pct=1.94, cost=23.858, quantity=600, pnl_amount=-2663.14, pnl_pct=-18.60, tag="电力材料", ai="真实持仓，弱势修复，重点看底背离和20线收复", keys="woerhecai wehc 002130"),
-    Stock(market="A股", name="中恒电气", code="002364.SZ", price=54.650, change_pct=0.57, cost=58.317, quantity=300, pnl_amount=-1100.17, pnl_pct=-6.29, tag="电力设备", ai="真实持仓，观察电力设备板块轮动和量能修复", keys="zhonghengdianqi zhdq 002364"),
-    Stock(market="A股", name="长高电气", code="002452.SZ", price=11.280, change_pct=-0.09, cost=12.205, quantity=900, pnl_amount=-833.11, pnl_pct=-7.58, tag="电力设备", ai="真实持仓，低位震荡，等待放量站回均线", keys="changgaodianqi cgdq 002452"),
-    Stock(market="A股", name="沪电股份", code="002463.SZ", price=137.120, change_pct=-0.89, cost=-16.892, quantity=200, pnl_amount=30802.50, pnl_pct=0, tag="PCB", ai="真实持仓，盈利垫较厚，高位强势但需监控顶背离", keys="hudiangufen hdgf 002463 pcb suanli"),
-    Stock(market="A股", name="英维克", code="002837.SZ", price=69.060, change_pct=1.45, cost=77.512, quantity=260, pnl_amount=-2197.60, pnl_pct=-10.90, tag="液冷", ai="真实持仓，算力液冷方向修复，关注板块重新转强", keys="yingweike ywk 002837 yeleng suanli"),
-    Stock(market="A股", name="鹏鼎控股", code="002938.SZ", price=115.080, change_pct=0.07, cost=-133.269, quantity=200, pnl_amount=49669.86, pnl_pct=0, tag="PCB", ai="真实持仓，盈利垫厚，强势股重点监控顶背离和放量分歧", keys="pengdingkonggu pdkg 002938 pcb"),
-    Stock(market="A股", name="生益科技", code="600183.SH", price=146.710, change_pct=-0.08, cost=-12.980, quantity=100, pnl_amount=15969.05, pnl_pct=0, tag="覆铜板", ai="真实持仓，盈利垫厚，关注覆铜板板块强弱和高位风险", keys="shengyikeji sykj 600183 futongban pcb"),
-    Stock(market="A股", name="工业富联", code="601138.SH", price=73.060, change_pct=-0.01, cost=69.925, quantity=200, pnl_amount=626.86, pnl_pct=4.48, tag="算力", ai="真实持仓，AI服务器链条活跃，趋势保持", keys="gongyefulian gyfl 601138 suanli ai fuwuqi"),
-    Stock(market="A股", name="紫金矿业", code="601899.SH", price=27.920, change_pct=-0.40, cost=39.850, quantity=100, pnl_amount=-1193.04, pnl_pct=-29.94, tag="黄金铜", ai="真实持仓，资源线承压，关注商品价格联动", keys="zijinkuangye zjky 601899 huangjin tong ziyuan"),
-    Stock(market="A股", name="北方华创", code="002371.SZ", price=318.40, change_pct=1.72, cost=302.00, tag="半导体", ai="设备龙头相对强势，关注板块持续性", keys="beifanghuachuang bfhc 002371"),
-    Stock(market="A股", name="中际旭创", code="300308.SZ", price=185.30, change_pct=4.62, cost=168.00, tag="CPO", ai="算力核心强势，追高看分时承接", keys="zhongjixuchuang zjxc 300308 cpo suanli ai"),
-    Stock(market="港股", name="腾讯控股", code="00700.HK", price=386.20, change_pct=-1.12, cost=372.00, tag="平台", ai="受恒指拖累，趋势未破", keys="tengxunkonggu txkg 00700"),
-    Stock(market="美股", name="NVIDIA", code="NVDA", price=121.60, change_pct=-3.84, cost=104.00, tag="AI", ai="纳指回调，关注20日线", keys="nvidia nvda yingweida"),
-]
+# 持仓从 holdings.json 读取（真实值不进 git）；仓库内只有脱敏模板 holdings.example.json
+STOCK_UNIVERSE: list[Stock] = load_holdings()
 
 
 INDICES: list[MarketIndex] = [
@@ -174,8 +157,6 @@ class DemoDataProvider:
         self.load_position_store()
         self.wencai = WencaiService()
         self.eastmoney_ai = EastMoneyAIService()
-        self.signal_engine = SignalEngine(self.data_dir)
-        self.holding_diagnosis = HoldingDiagnosisEngine()
 
     @staticmethod
     def to_eastmoney_secid(code: str) -> str:
@@ -1122,88 +1103,6 @@ class DemoDataProvider:
         return self.sector_snapshot
 
     def refresh_quotes(self, codes: list[str] | None = None) -> bool:
-        now = time.time()
-        target_codes = codes or [code for code in self.stocks if code.endswith((".SZ", ".SH"))]
-        target_codes = [code for code in target_codes if code.endswith((".SZ", ".SH"))]
-        if now - self.last_quote_refresh < 5 and all(
-            self.stocks.get(code) and self.stocks[code].price > 0 and "search" not in self.stocks[code].source
-            for code in target_codes
-        ):
-            return True
-        # 主力源 1: AKShare（最稳定，覆盖全A）
-        if self._refresh_quotes_akshare(target_codes):
-            self.last_quote_refresh = now
-            self.last_quote_source = "akshare"
-            return True
-        # 备用源 1: 腾讯
-        if self.refresh_quotes_tencent(target_codes):
-            self.last_quote_refresh = now
-            self.last_quote_source = "tencent"
-            return True
-        # 备用源 2: 东方财富 HTTP
-        secids = ",".join(self.to_eastmoney_secid(code) for code in target_codes if code.endswith((".SZ", ".SH")))
-        if not secids:
-            return False
-        fields = "f12,f14,f2,f3"
-        url = f"https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields={fields}&secids={urllib.parse.quote(secids)}"
-        try:
-            request = urllib.request.Request(
-                url,
-                headers={
-                    "User-Agent": "Mozilla/5.0",
-                    "Referer": "https://quote.eastmoney.com/",
-                },
-            )
-            with urllib.request.urlopen(request, timeout=5) as response:
-                payload = json.loads(response.read().decode("utf-8", errors="ignore"))
-        except Exception:
-            ok = self.refresh_quotes_sina(target_codes)
-            if ok:
-                self.last_quote_refresh = now
-                self.last_quote_source = "sina"
-            return ok
-
-        rows = payload.get("data", {}).get("diff") or []
-        for row in rows:
-            code = self.normalize_code(str(row.get("f12", "")), None)
-            if code not in self.stocks:
-                continue
-            stock = self.stocks[code]
-            if isinstance(row.get("f2"), (int, float)):
-                stock.price = float(row["f2"])
-            if isinstance(row.get("f3"), (int, float)):
-                stock.change_pct = float(row["f3"])
-            stock.source = "eastmoney"
-        ok = bool(rows)
-        if ok:
-            self.last_quote_refresh = now
-            self.last_quote_source = "eastmoney"
-        return ok
-
-    def _refresh_quotes_akshare(self, codes: list[str]) -> bool:
-        """用 AKShare 获取实时行情，作为主力源。"""
-        result = self.akshare.spot_all()
-        if not result.get("ok"):
-            return False
-        items = result.get("items", [])
-        matched = 0
-        for item in items:
-            code = item.get("code")
-            if not code or code not in self.stocks:
-                continue
-            stock = self.stocks[code]
-            stock.price = item.get("price", stock.price)
-            stock.change_pct = item.get("change_pct", stock.change_pct)
-            stock.open = item.get("open", stock.open)
-            stock.high = item.get("high", stock.high)
-            stock.low = item.get("low", stock.low)
-            stock.prev_close = item.get("prev_close", stock.prev_close)
-            stock.volume = item.get("volume", stock.volume)
-            stock.amount = item.get("amount", stock.amount)
-            stock.turnover = item.get("turnover", stock.turnover)
-            stock.source = "akshare"
-            matched += 1
-        return matched > 0
         now = time.time()
         target_codes = codes or [code for code in self.stocks if code.endswith((".SZ", ".SH"))]
         target_codes = [code for code in target_codes if code.endswith((".SZ", ".SH"))]
@@ -3175,13 +3074,14 @@ class DemoDataProvider:
             stock = self.stocks.get(code)
             if not stock:
                 continue
+            # 盈亏按实时价重算：旧逻辑只在快照为空时才算，导致 price 已更新而盈亏停在旧值
             pnl_pct = stock.pnl_pct
-            if pnl_pct is None and stock.cost:
-                pnl_pct = (stock.price - stock.cost) / abs(stock.cost) * 100
+            if stock.cost > 0:
+                pnl_pct = (stock.price - stock.cost) / stock.cost * 100
             pnl_pct = pnl_pct or 0
             pnl_amount = stock.pnl_amount
-            if pnl_amount is None:
-                pnl_amount = (stock.price - stock.cost) * stock.quantity if stock.quantity else 0
+            if stock.cost > 0 and stock.quantity:
+                pnl_amount = (stock.price - stock.cost) * stock.quantity
             prev_close = stock.price / (1 + stock.change_pct / 100) if stock.change_pct > -99 else stock.price
             daily_pnl = (stock.price - prev_close) * stock.quantity if stock.quantity else 0
             breakthrough = breakthrough_rows.get(code, {})

@@ -1,66 +1,71 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-.venv/
-ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# 环境变量（包含敏感信息）
+# ---- 凭证与配置 ----
 .env
 .env.*
 !.env.example
+!.env.*.example
+*.env
+!*.example
+.env.wencai
+secrets/
+*.pem
+*.key
+*.p12
 
-# 敏感凭证（用户自行配置）
-wencai_hexinv.txt
-eastmoney_api_key.txt
-eastmoney_cookie.txt
-*.private
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+*.spec.bak
+.pytest_cache/
+.venv/
+venv/
+env/
+htmlcov/
+.coverage
+coverage.xml
 
-# 数据文件
-data/*.db
-data/*.sqlite
-data/cache/
-data/history/
+# ---- PyInstaller 打包产物 ----
+*.pyz
+*.pkg
+*.exe
+*.msi
+*.app/
+xref-*.html
+base_library.zip
 
-# IDE
+# ---- 数据与日志 ----
+data/
+logs/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.csv
+!requirements*.csv
+
+# ---- 备份与临时 ----
+*.bak
+*.bak-*
+*.orig
+*.tmp
+*.swp
+*~
+.DS_Store
+
+# ---- 编辑器 / 系统 ----
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
+*.code-workspace
 Thumbs.db
 
-# 打包输出
-build/
-dist/
-*.spec
+# ---- 压缩包 ----
+*.zip
+!*.zip.example
 
-# 测试
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Docker
-docker-data/
+# ---- 真实持仓（含成本与持股数，不进 git；但会打进 Docker 镜像）----
+holdings.json
+!holdings.example.json

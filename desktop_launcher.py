@@ -1,23 +1,6 @@
 from __future__ import annotations
 
-import json
 import os
-import socket
-import threading
-import time
-import traceback
-import urllib.request
-import webbrowser
-from pathlib import Path
-
-import uvicorn
-
-
-MUTEX_NAME = "LaomaStockAssistant.Singleton"
-_mutex_handle = None
-_AUTO_LAN_IP = object()
-DEFAULT_PORT = 8788
-CONFIG_FILENAME = "config.json"
 import socket
 import threading
 import time
@@ -35,43 +18,6 @@ _AUTO_LAN_IP = object()
 
 
 def app_data_dir() -> Path:
-    base = os.getenv("APPDATA") or str(Path.home())
-    path = Path(base) / "LaomaStockAssistant"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def load_config(data_dir: Path) -> dict:
-    """加载用户配置文件 config.json，支持自定义端口、绑定地址等。"""
-    config_path = data_dir / CONFIG_FILENAME
-    config = {}
-    if config_path.exists():
-        try:
-            config = json.loads(config_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return config
-
-
-def save_config(data_dir: Path, config: dict) -> None:
-    """保存用户配置文件。"""
-    config_path = data_dir / CONFIG_FILENAME
-    try:
-        config_path.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
-
-
-def init_default_config(data_dir: Path) -> dict:
-    """首次运行时创建默认配置文件。"""
-    default = {
-        "port": DEFAULT_PORT,
-        "bind_host": "0.0.0.0",
-        "auto_open_browser": True,
-        "note": "修改 port 可自定义服务端口，重启生效",
-    }
-    save_config(data_dir, default)
-    return default
     base = os.getenv("APPDATA") or str(Path.home())
     path = Path(base) / "LaomaStockAssistant"
     path.mkdir(parents=True, exist_ok=True)
@@ -144,58 +90,6 @@ def open_browser_later(url: str) -> None:
 
 
 def main() -> None:
-    data_dir = app_data_dir()
-    os.environ.setdefault("LAOMA_STOCK_DATA_DIR", str(data_dir))
-    os.environ.setdefault("PYTHONUTF8", "1")
-
-    # 加载或初始化用户配置
-    config = load_config(data_dir)
-    if not config:
-        config = init_default_config(data_dir)
-        print(f"首次运行，已创建默认配置文件: {data_dir / CONFIG_FILENAME}")
-        print(f"  默认端口: {config['port']}，如需修改请编辑该文件后重启")
-
-    preferred_port = config.get("port", DEFAULT_PORT)
-    bind_host = os.getenv("LAOMA_BIND_HOST", config.get("bind_host", "0.0.0.0")).strip() or "0.0.0.0"
-    auto_open = config.get("auto_open_browser", True)
-
-    if not acquire_single_instance():
-        webbrowser.open(existing_app_url(preferred_port) or local_app_url(preferred_port))
-        return
-    existing_url = existing_app_url(preferred_port)
-    if existing_url:
-        webbrowser.open(existing_url)
-        return
-    try:
-        port = choose_port(preferred_port)
-        if auto_open:
-            open_browser_later(local_app_url(port))
-        lan_url = public_app_url(port, bind_host=bind_host)
-        print(f"LaomaStockAssistant running on {local_app_url(port)}")
-        print(f"  配置文件: {data_dir / CONFIG_FILENAME}")
-        if lan_url != local_app_url(port):
-            print(f"  LAN access: {lan_url}")
-        uvicorn.run(
-            "app.main:app",
-            host=bind_host,
-            port=port,
-            log_config=None,
-            access_log=False,
-        )
-    except Exception:
-        error_path = data_dir / "startup-error.log"
-        error_path.write_text(traceback.format_exc(), encoding="utf-8")
-        try:
-            import ctypes
-
-            ctypes.windll.user32.MessageBoxW(
-                0,
-                f"软件启动失败。错误日志：\n{error_path}",
-                "老马智能股票盯盘助手",
-                0x10,
-            )
-        except Exception:
-            pass
     data_dir = app_data_dir()
     os.environ.setdefault("LAOMA_STOCK_DATA_DIR", str(data_dir))
     os.environ.setdefault("PYTHONUTF8", "1")

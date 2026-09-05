@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>老马智能股票盯盘助手</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260801-v2.0-decision">
+  <link rel="stylesheet" href="/static/styles.css?v=20260825-agent-v5">
   <style>
     .hidden { display: none !important; }
     .login-gate { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: linear-gradient(135deg, #f7fbff 0%, #edf4ff 45%, #f8fafc 100%); padding: 20px; }
@@ -56,19 +56,6 @@
     </form>
   </div>
   <aside>
-    <div class="brand">老马智能股票盯盘助手<span>v2.0 决策辅助</span></div>
-    <button class="nav active" data-view="opportunities">机会发现</button>
-    <button class="nav" data-view="holdings">持仓诊断</button>
-    <button class="nav" data-view="signals">交易信号</button>
-    <button class="nav" data-view="review">复盘归因</button>
-    <button class="nav admin-only" data-view="admin">会员管理</button>
-    <div class="side-card">
-      <b>v2.0 决策模式</b>
-      <span>实时行情：已接入</span>
-      <button id="aiGatewayButton" class="gateway-status" type="button">AI网关：读取中...</button>
-      <span>信号引擎：已启用</span>
-    </div>
-  </aside>
     <div class="brand">老马智能股票盯盘助手<span>内部量化工作台</span></div>
     <button class="nav active" data-view="dashboard">今日工作台</button>
     <button class="nav" data-view="review">复盘中心</button>
@@ -77,7 +64,6 @@
     <button class="nav" data-view="market">市场行情</button>
     <button class="nav" data-view="abnormal">异动监控</button>
     <button class="nav" data-view="screener">智能选股</button>
-    <button class="nav" data-view="ai-tools">AI 工具</button>
     <button class="nav" data-view="research">研究中心</button>
     <button class="nav admin-only" data-view="admin">会员管理</button>
     <div class="side-card">
@@ -107,7 +93,7 @@
         <div class="mobile-status-bar">
           <div>
             <b>手机盯盘工作台</b>
-            <span id="mobileDashboardUpdatedAt">等待首次刷新</span>
+            <span id="mobileDashboardUpdatedAt">登录后自动刷新</span>
           </div>
           <button id="mobileDashboardRefresh" type="button">刷新</button>
         </div>
@@ -154,6 +140,7 @@
       </section>
       <div class="desktop-dashboard-content">
         <div id="dataQualityBanner" class="warning">正在检查行情源状态...</div>
+        <div id="sessionGuide" class="session-guide"></div>
         <div id="indexStrip" class="strip"></div>
         <div class="panel hero-panel">
           <div>
@@ -243,7 +230,7 @@
             <input id="eaMaxOrders" type="number" min="1" max="20" value="5" title="本轮最多模拟订单">
             <button id="runEaSimulation" type="button">运行一轮模拟</button>
           </div>
-          <div id="eaSimulationBody" class="ea-simulation-body"><div class="empty">等待读取 EA 模拟盘状态。</div></div>
+          <div id="eaSimulationBody" class="ea-simulation-body"><div class="empty">EA 模拟盘尚未运行。选择策略后点「运行一轮模拟」，系统自动模拟下单并归档到交易日志。</div></div>
         </div>
         <div id="actionQueue" class="action-queue-board"></div>
         <h2 class="spaced-title">交易日志 / 模拟执行</h2>
@@ -313,7 +300,7 @@
             <h2>股票异动监控</h2>
             <p>融合 GO-STOCK 异动页的“利好/利空”分类，基于全A快照识别火箭发射、打开涨停、封跌停、大笔买卖等信号。</p>
           </div>
-          <div id="abnormalSourceStatus" class="screener-source-status">等待读取</div>
+          <div id="abnormalSourceStatus" class="screener-source-status">未扫描 · 点上方「刷新实时」</div>
         </div>
         <div class="screener-filter-card">
           <div class="section-head">
@@ -341,7 +328,7 @@
             <h2>智能选股中心</h2>
             <p>确定性指标负责筛选，AI负责解释与复核；所有结果标记来源、时点和降级状态。</p>
           </div>
-          <div id="screenerSourceStatus" class="screener-source-status">等待首次扫描</div>
+          <div id="screenerSourceStatus" class="screener-source-status">未扫描 · 选条件后点「扫描全A」</div>
         </div>
         <div class="screener-tabs" role="tablist">
           <button class="active" type="button" data-screener-tab="shape">形态选股</button>
@@ -381,7 +368,7 @@
                 <button id="runIndicatorScreener" class="primary" type="button">执行扫描</button>
                 <button id="saveScreenerStrategy" type="button">保存策略</button>
               </div>
-              <div class="dsl-preview"><b>执行前确认条件</b><pre id="strategyDslPreview">尚未解析</pre></div>
+              <div class="dsl-preview"><b>执行前确认条件</b><pre id="strategyDslPreview">输入条件后点「解析条件」自动生成</pre></div>
               <div id="indicatorScreenerResult" class="screener-result"><div class="empty">先解析条件，再确认执行全A扫描。</div></div>
             </div>
           </div>
@@ -389,7 +376,7 @@
 
         <div class="screener-pane" data-screener-pane="recommendation">
           <div class="section-head"><div><h3>推荐验证台</h3><p>推荐时价格和证据保持不变，后续价格按交易日累计。</p></div><button id="refreshRecommendationValidation" type="button">刷新验证</button></div>
-          <div id="recommendationValidation" class="screener-result"><div class="empty">暂无推荐记录。</div></div>
+          <div id="recommendationValidation" class="screener-result"><div class="empty">暂无推荐验证记录。点「刷新验证」拉取历史推荐，验证命中率与盈亏比。</div></div>
         </div>
 
         <div class="screener-pane" data-screener-pane="health">
@@ -455,162 +442,6 @@
       </div>
     </section>
 
-    <section id="ai-tools" class="view">
-      <div class="panel screener-shell">
-        <div class="section-head screener-heading">
-          <div>
-            <span class="eyebrow">问财选股 × 东财 AI</span>
-            <h2>AI 工具中心</h2>
-            <p>接入同花顺问财自然语言选股和东方财富妙想 AI，辅助盘中决策与盘后研究。</p>
-          </div>
-          <div id="aiToolsSourceStatus" class="screener-source-status">等待读取</div>
-        </div>
-
-        <div class="screener-tabs" role="tablist">
-          <button class="active" type="button" data-ai-tab="wencai">问财选股</button>
-          <button type="button" data-ai-tab="eastmoney-hotspot">东财热点</button>
-          <button type="button" data-ai-tab="eastmoney-analysis">东财分析</button>
-          <button type="button" data-ai-tab="eastmoney-qa">东财问答</button>
-        </div>
-
-        <!-- 问财选股 -->
-        <div class="screener-pane active" data-ai-pane="wencai">
-          <div class="screener-filter-card">
-            <div>
-              <h3>同花顺问财 — 自然语言选股</h3>
-              <p>输入自然语言描述选股条件，例如"近5日涨幅超过10%的科技股"。</p>
-            </div>
-            <div class="screener-search-bar">
-              <input id="wencaiQueryInput" value="近5日涨幅超过10%，换手率大于3%，市值大于50亿" placeholder="输入问财选股条件">
-              <button id="runWencaiQuery" class="primary" type="button">问财选股</button>
-            </div>
-            <div class="screener-inline-controls">
-              <label>结果数量<input id="wencaiLimit" type="number" min="1" max="100" value="20"></label>
-              <label>排序方式
-                <select id="wencaiSort">
-                  <option value="">默认</option>
-                  <option value="price_change_rate:desc">涨幅从高到低</option>
-                  <option value="turnover_rate:desc">换手率从高到低</option>
-                  <option value="market_cap:desc">市值从大到小</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <div id="wencaiResult" class="screener-result"><div class="empty">输入条件后点击"问财选股"。</div></div>
-        </div>
-
-        <!-- 东财热点 -->
-        <div class="screener-pane" data-ai-pane="eastmoney-hotspot">
-          <div class="screener-filter-card">
-            <div>
-              <h3>东方财富妙想 — 热点发现</h3>
-              <p>获取市场最新热点板块和主题，捕捉资金流向。</p>
-            </div>
-            <div class="screener-search-bar">
-              <input id="eastmoneyHotspotQuery" value="" placeholder="可选：输入主题关键词筛选">
-              <button id="runEastMoneyHotspot" class="primary" type="button">获取热点</button>
-            </div>
-            <div class="screener-inline-controls">
-              <label>热点类型
-                <select id="eastmoneyHotspotType">
-                  <option value="all">全部</option>
-                  <option value="industry">行业板块</option>
-                  <option value="concept">概念板块</option>
-                  <option value="region">地域板块</option>
-                </select>
-              </label>
-              <label>结果数量<input id="eastmoneyHotspotLimit" type="number" min="5" max="50" value="20"></label>
-            </div>
-          </div>
-          <div id="eastmoneyHotspotResult" class="screener-result"><div class="empty">点击"获取热点"查看市场热点。</div></div>
-        </div>
-
-        <!-- 东财个股分析 -->
-        <div class="screener-pane" data-ai-pane="eastmoney-analysis">
-          <div class="screener-filter-card">
-            <div>
-              <h3>东方财富妙想 — 个股 AI 分析</h3>
-              <p>输入股票代码，获取东方财富 AI 对个股的综合分析。</p>
-            </div>
-            <div class="screener-search-bar">
-              <input id="eastmoneyAnalysisCode" placeholder="输入股票代码，例如 000001.SZ 或 600000.SH">
-              <button id="runEastMoneyAnalysis" class="primary" type="button">AI 分析</button>
-            </div>
-            <div class="screener-inline-controls">
-              <label>分析维度
-                <select id="eastmoneyAnalysisType">
-                  <option value="comprehensive">综合分析</option>
-                  <option value="fund">资金流向</option>
-                  <option value="technical">技术面</option>
-                  <option value="fundamental">基本面</option>
-                  <option value="news">舆情分析</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <div id="eastmoneyAnalysisResult" class="screener-result"><div class="empty">输入股票代码后点击"AI 分析"。</div></div>
-        </div>
-
-        <!-- 东财问答 -->
-        <div class="screener-pane" data-ai-pane="eastmoney-qa">
-          <div class="screener-filter-card">
-            <div>
-              <h3>东方财富妙想 — 智能问答</h3>
-              <p>向东方财富 AI 提问任何市场相关问题。</p>
-            </div>
-            <div class="screener-search-bar">
-              <input id="eastmoneyQAQuestion" placeholder="输入你的问题，例如：最近有哪些利好政策？">
-              <button id="runEastMoneyQA" class="primary" type="button">提问</button>
-            </div>
-          </div>
-          <div id="eastmoneyQAResult" class="screener-result"><div class="empty">输入问题后点击"提问"。</div></div>
-        </div>
-      </div>
-    </section>
-
-
-    <!-- v2.0 机会发现 -->
-    <section id="opportunities" class="view active">
-      <div class="panel">
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">问财 × 东财 × 智能选股</span>
-            <h2>机会发现</h2>
-            <p>在大量数据中找到核心决策点——推荐选股的成功率。</p>
-          </div>
-        </div>
-        <div id="opportunitiesBody" class="cards"><div class="empty">正在扫描市场机会...</div></div>
-      </div>
-    </section>
-
-    <!-- v2.0 持仓诊断 -->
-    <section id="holdings" class="view">
-      <div class="panel">
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">持仓体检 + 波动归因</span>
-            <h2>持仓诊断</h2>
-            <p>对每只持仓进行"体检"：评分 + 诊断 + 建议 + 波动归因。</p>
-          </div>
-        </div>
-        <div id="holdingsBody"><div class="empty">正在诊断持仓...</div></div>
-      </div>
-    </section>
-
-    <!-- v2.0 交易信号 -->
-    <section id="signals" class="view">
-      <div class="panel">
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">信号卡片 · 执行 · 忽略 · 延后</span>
-            <h2>交易信号</h2>
-            <p>从行情数据中识别交易机会，生成带置信度的可执行信号。</p>
-          </div>
-        </div>
-        <div id="signalsBody"><div class="empty">正在生成信号...</div></div>
-      </div>
-    </section>
-
     <section id="admin" class="view">
       <div class="panel admin-member-panel">
         <div class="section-head">
@@ -638,12 +469,6 @@
   </main>
 
   <nav id="mobileBottomTabs" class="mobile-bottom-tabs" aria-label="移动端主导航">
-    <button type="button" data-mobile-view="opportunities" class="active">机会</button>
-    <button type="button" data-mobile-view="holdings">持仓</button>
-    <button type="button" data-mobile-view="signals">信号</button>
-    <button type="button" data-mobile-view="review">复盘</button>
-    <button type="button" data-mobile-view="admin" class="admin-only">管理</button>
-  </nav>"mobileBottomTabs" class="mobile-bottom-tabs" aria-label="移动端主导航">
     <button type="button" data-mobile-view="dashboard" class="active">首页</button>
     <button type="button" data-mobile-view="watchlist">自选</button>
     <button type="button" data-mobile-view="trading">动作</button>
@@ -850,6 +675,23 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260801-v2.0-decision"></script>
+  <!-- 盯盘智能体：悬浮按钮 + 对话面板 -->
+  <button type="button" id="agentFab" class="agent-fab" title="盯盘智能体">🐎<span>问智能体</span></button>
+  <div id="agentPanel" class="agent-panel" hidden>
+    <div class="agent-header">
+      <div class="agent-title">🐎 老马盯盘智能体<small>直接问 · 自动查数据 · 给操作建议</small></div>
+      <button type="button" id="agentDebateToggle" class="agent-mode-toggle" title="开启后由 4 位专家并行分析并多空辩论">🎯 多专家博弈</button>
+      <button type="button" id="agentClose" title="收起">×</button>
+    </div>
+    <div class="agent-messages" id="agentMessages"></div>
+    <div class="agent-quick" id="agentQuick"></div>
+    <div class="agent-inputrow">
+      <input id="agentInput" type="text" maxlength="500" placeholder="问我任何盯盘问题，如：我的持仓要注意什么？">
+      <button type="button" id="agentSend">发送</button>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=20260824-agent-v4"></script>
+  <script src="/static/agent.js?v=20260825-agent-v5"></script>
 </body>
 </html>
