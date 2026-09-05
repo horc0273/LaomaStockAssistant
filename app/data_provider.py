@@ -2033,11 +2033,11 @@ class DemoDataProvider:
             return sectors[:12]
         return [
             {"name": "银行", "change_pct": 0.97, "strength": 82, "fund_flow": 18.6, "reason": "低位护盘，资金从高位科技成长切换"},
-            {"name": "数字乡村", "change_pct": 0.10, "strength": 74, "fund_flow": 6.2, "reason": "新大陆相关主题，适合事件驱动跟踪"},
-            {"name": "电子发票", "change_pct": 0.08, "strength": 71, "fund_flow": 4.8, "reason": "新大陆相关概念，关注持续性"},
-            {"name": "PCB", "change_pct": 1.86, "strength": 86, "fund_flow": 22.4, "reason": "沪电股份、鹏鼎控股、生益科技持仓相关"},
-            {"name": "算力液冷", "change_pct": -0.42, "strength": 61, "fund_flow": -3.6, "reason": "英维克相关，板块分歧仍在"},
-            {"name": "资源金属", "change_pct": -1.18, "strength": 48, "fund_flow": -9.2, "reason": "北方铜业、紫金矿业相关，商品联动承压"},
+            {"name": "数字乡村", "change_pct": 0.10, "strength": 74, "fund_flow": 6.2, "reason": "政策驱动主题，适合事件驱动跟踪"},
+            {"name": "电子发票", "change_pct": 0.08, "strength": 71, "fund_flow": 4.8, "reason": "题材轮动概念，关注持续性"},
+            {"name": "PCB", "change_pct": 1.86, "strength": 86, "fund_flow": 22.4, "reason": "AI 服务器与交换机 PCB 需求驱动"},
+            {"name": "算力液冷", "change_pct": -0.42, "strength": 61, "fund_flow": -3.6, "reason": "液冷渗透率提升，板块分歧仍在"},
+            {"name": "资源金属", "change_pct": -1.18, "strength": 48, "fund_flow": -9.2, "reason": "商品联动承压，关注美元与库存变化"},
         ]
 
     def fund_flow_for_stocks(self, stocks: list[Stock]) -> list[dict]:
@@ -2703,9 +2703,9 @@ class DemoDataProvider:
     def events(self) -> list[dict]:
         return [
             {"time": datetime.now().isoformat(timespec="seconds"), "type": "市场", "title": "A股三大指数实时刷新，市场处于修复状态", "impact": "中性偏多", "symbols": []},
-            {"time": datetime.now().isoformat(timespec="seconds"), "type": "主题", "title": "数字乡村、电子发票进入新大陆事件观察池", "impact": "观察", "symbols": ["000997.SZ"]},
-            {"time": datetime.now().isoformat(timespec="seconds"), "type": "资金", "title": "PCB持仓方向盈利垫较厚，需监控顶背离和放量分歧", "impact": "风险提示", "symbols": ["002463.SZ", "002938.SZ", "600183.SH"]},
-            {"time": datetime.now().isoformat(timespec="seconds"), "type": "模型", "title": "北方铜业、紫金矿业进入资源线弱势修复观察", "impact": "谨慎", "symbols": ["000737.SZ", "601899.SH"]},
+            {"time": datetime.now().isoformat(timespec="seconds"), "type": "主题", "title": "数字乡村、电子发票进入事件观察池", "impact": "观察", "symbols": []},
+            {"time": datetime.now().isoformat(timespec="seconds"), "type": "资金", "title": "PCB 板块资金分歧加大，需监控顶背离和放量", "impact": "风险提示", "symbols": []},
+            {"time": datetime.now().isoformat(timespec="seconds"), "type": "模型", "title": "资源金属线处于弱势修复观察", "impact": "谨慎", "symbols": []},
         ]
 
     def strategy_scan(self) -> dict:
@@ -2720,7 +2720,7 @@ class DemoDataProvider:
             momentum = max(0, min(100, 55 + stock.change_pct * 5))
             fund_score = max(0, min(100, 60 + stock.change_pct * 3 + (sector.get("fund_flow", 0) or 0)))
             ma_score = 72 if stock.pnl_pct is not None and stock.pnl_pct > -12 else 48
-            if stock.name in {"新大陆", "沃尔核材", "北方铜业"}:
+            if stock.pnl_pct is not None and stock.pnl_pct < -15:
                 strategy = "2060低位修复"
                 ma_score += 8
             elif stock.cost < 0 or (stock.pnl_amount or 0) > 10000:
